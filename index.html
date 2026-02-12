@@ -1,0 +1,1232 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>塔罗指引 · Tarot Divination</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Vue 3 -->
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    
+    <!-- GSAP -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
+    
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;500;600;700&family=Noto+Serif+SC:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        mystic: {
+                            purple: '#6b4ee6',
+                            violet: '#8b5cf6',
+                            pink: '#ec4899',
+                            cyan: '#06b6d4',
+                            gold: '#fbbf24',
+                        }
+                    },
+                    fontFamily: {
+                        'serif': ['Noto Serif SC', 'Cinzel', 'serif'],
+                        'display': ['Cinzel', 'serif'],
+                    }
+                }
+            }
+        }
+    </script>
+    
+    <style>
+        :root {
+            --bg-primary: #0a0a0f;
+            --text-primary: #f0f0f0;
+            --accent-purple: #6b4ee6;
+            --accent-gold: #fbbf24;
+        }
+        
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        body {
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            font-family: 'Noto Serif SC', serif;
+            overflow-x: hidden;
+        }
+        
+        /* 液态背景 */
+        .liquid-bg {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: -1;
+            overflow: hidden;
+        }
+        
+        .liquid-blob {
+            position: absolute;
+            border-radius: 50%;
+            filter: blur(80px);
+            opacity: 0.4;
+            animation: blob-morph 20s ease-in-out infinite;
+        }
+        
+        .blob-1 { width: 600px; height: 600px; background: linear-gradient(135deg, #6b4ee6, #8b5cf6); top: -200px; left: -200px; }
+        .blob-2 { width: 500px; height: 500px; background: linear-gradient(135deg, #ec4899, #8b5cf6); bottom: -150px; right: -150px; animation-delay: -5s; }
+        .blob-3 { width: 400px; height: 400px; background: linear-gradient(135deg, #06b6d4, #6366f1); top: 50%; left: 50%; transform: translate(-50%, -50%); animation-delay: -10s; }
+        
+        @keyframes blob-morph {
+            0%, 100% { border-radius: 60% 40% 30% 70% / 60% 30% 70% 40%; transform: translate(0, 0) rotate(0deg); }
+            25% { border-radius: 30% 60% 70% 40% / 50% 60% 30% 60%; transform: translate(50px, -50px) rotate(90deg); }
+            50% { border-radius: 50% 60% 30% 60% / 30% 60% 70% 40%; transform: translate(-30px, 30px) rotate(180deg); }
+            75% { border-radius: 60% 40% 60% 30% / 70% 30% 50% 60%; transform: translate(20px, -20px) rotate(270deg); }
+        }
+        
+        /* 噪点纹理 */
+        .noise-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: -1;
+            opacity: 0.03;
+            pointer-events: none;
+            background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+        }
+        
+        /* 星星背景 */
+        .stars {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: -2;
+            pointer-events: none;
+        }
+        
+        .star {
+            position: absolute;
+            width: 2px;
+            height: 2px;
+            background: white;
+            border-radius: 50%;
+            animation: twinkle 3s ease-in-out infinite;
+        }
+        
+        @keyframes twinkle {
+            0%, 100% { opacity: 0.3; }
+            50% { opacity: 1; }
+        }
+        
+        /* 玻璃拟态 */
+        .glass-card {
+            background: linear-gradient(135deg, rgba(107, 78, 230, 0.1), rgba(236, 72, 153, 0.05));
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid rgba(107, 78, 230, 0.2);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+        }
+        
+        /* 塔罗牌基础样式 */
+        .tarot-card {
+            width: 70px;
+            height: 120px;
+            border-radius: 8px;
+            position: relative;
+            transform-style: preserve-3d;
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+            cursor: pointer;
+            flex-shrink: 0;
+        }
+        
+        .tarot-card:hover {
+            transform: translateY(-15px) scale(1.15);
+            z-index: 100;
+            box-shadow: 0 20px 40px rgba(107, 78, 230, 0.4);
+        }
+        
+        .tarot-card.selected {
+            transform: translateY(-30px) scale(1.2);
+            z-index: 200;
+            box-shadow: 0 0 30px rgba(251, 191, 36, 0.6), 0 20px 40px rgba(107, 78, 230, 0.5);
+            border: 2px solid #fbbf24;
+        }
+        
+        .tarot-card.drawn {
+            animation: drawCard 0.8s ease-out forwards;
+        }
+        
+        @keyframes drawCard {
+            0% { transform: translateY(0) scale(1); }
+            50% { transform: translateY(-50px) scale(1.1); }
+            100% { transform: translateY(0) scale(1); }
+        }
+        
+        .tarot-card.flipped {
+            transform: rotateY(180deg);
+        }
+        
+        .card-face {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            backface-visibility: hidden;
+            border-radius: 8px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            font-size: 10px;
+            text-align: center;
+            padding: 4px;
+            overflow: hidden;
+        }
+        
+        /* 卡牌背面 - 神秘图案 */
+        .card-back {
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%), repeating-linear-gradient(45deg, rgba(255,255,255,0.04) 0px, rgba(255,255,255,0.04) 2px, transparent 2px, transparent 8px);
+            border: 1px solid rgba(107, 78, 230, 0.5);
+        }
+        
+        .card-back::before {
+            content: '';
+            position: absolute;
+            inset: 4px;
+            border: 1px solid rgba(107, 78, 230, 0.3);
+            border-radius: 4px;
+        }
+        
+        /* 卡牌正面 - 独特图案 */
+        .card-front {
+            background: linear-gradient(135deg, #2d1b69 0%, #1a1a2e 100%);
+            border: 1px solid rgba(251, 191, 36, 0.5);
+            transform: rotateY(180deg);
+        }
+        
+        /* 卡牌图案样式 */
+        .card-pattern {
+            position: absolute;
+            inset: 0;
+            opacity: 0.3;
+        }
+        
+        .card-symbol {
+            font-size: 24px;
+            z-index: 2;
+            text-shadow: 0 0 10px rgba(255,255,255,0.3);
+        }
+        
+        .card-name {
+            font-size: 8px;
+            z-index: 2;
+            margin-top: 4px;
+            color: #fbbf24;
+            font-weight: 600;
+        }
+        
+        /* 弧形卡牌容器 */
+        .arc-container {
+            position: relative;
+            width: 100%;
+            height: 280px;
+            display: flex;
+            justify-content: center;
+            align-items: flex-end;
+            padding-bottom: 20px;
+        }
+        
+        .arc-card-wrapper {
+            position: absolute;
+            transform-origin: center bottom;
+            transition: all 0.3s ease;
+        }
+        
+        /* 已抽卡牌区域 */
+        .drawn-cards-area {
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            flex-wrap: wrap;
+            margin-top: 30px;
+            min-height: 150px;
+        }
+        
+        .drawn-card {
+            width: 100px;
+            height: 170px;
+            border-radius: 10px;
+            position: relative;
+            transform-style: preserve-3d;
+            transition: transform 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+            cursor: pointer;
+        }
+        
+        .drawn-card:hover {
+            transform: translateY(-10px) scale(1.05);
+        }
+        
+        .drawn-card.flipped {
+            transform: rotateY(180deg);
+        }
+        
+        .drawn-card .card-face {
+            width: 100%;
+            height: 100%;
+            font-size: 12px;
+        }
+        
+        .drawn-card .card-symbol {
+            font-size: 36px;
+        }
+        
+        .drawn-card .card-name {
+            font-size: 11px;
+        }
+        
+        /* 输入框样式 */
+        .mystic-input-wrapper {
+            position: relative;
+            display: flex;
+            align-items: center;
+        }
+        
+        .mystic-input {
+            background: rgba(18, 18, 26, 0.8);
+            border: 1px solid rgba(107, 78, 230, 0.3);
+            border-radius: 12px;
+            padding: 14px 52px 14px 20px;
+            color: #f0f0f0;
+            font-size: 15px;
+            transition: all 0.3s ease;
+            width: 100%;
+        }
+        
+        .mystic-input:focus {
+            outline: none;
+            border-color: #8b5cf6;
+            box-shadow: 0 0 20px rgba(107, 78, 230, 0.3);
+        }
+        
+        .enter-icon {
+            position: absolute;
+            right: 12px;
+            width: 28px;
+            height: 28px;
+            background: linear-gradient(135deg, #6b4ee6, #8b5cf6);
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        
+        .enter-icon:hover {
+            transform: scale(1.1);
+            box-shadow: 0 0 15px rgba(107, 78, 230, 0.5);
+        }
+        
+        /* 按钮样式 */
+        .mystic-btn {
+            background: linear-gradient(135deg, #6b4ee6, #8b5cf6);
+            border: none;
+            border-radius: 12px;
+            padding: 14px 28px;
+            color: white;
+            font-size: 15px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        
+        .mystic-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 30px rgba(107, 78, 230, 0.4);
+        }
+        
+        .mystic-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        
+        /* 选项卡片 */
+        .option-card {
+            background: rgba(18, 18, 26, 0.6);
+            border: 1px solid rgba(107, 78, 230, 0.2);
+            border-radius: 10px;
+            padding: 10px 6px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-align: center;
+        }
+        
+        .option-card:hover {
+            border-color: rgba(107, 78, 230, 0.5);
+            background: rgba(107, 78, 230, 0.1);
+        }
+        
+        .option-card.selected {
+            border-color: #8b5cf6;
+            background: rgba(107, 78, 230, 0.2);
+            box-shadow: 0 0 15px rgba(107, 78, 230, 0.3);
+        }
+        
+        /* 解读区域 */
+        .reading-section {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 30px;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 20px;
+        }
+        
+        @media (max-width: 900px) {
+            .reading-section {
+                grid-template-columns: 1fr;
+            }
+        }
+        
+        .reading-card {
+            background: linear-gradient(135deg, rgba(107, 78, 230, 0.1), rgba(236, 72, 153, 0.05));
+            border: 1px solid rgba(107, 78, 230, 0.2);
+            border-radius: 16px;
+            padding: 20px;
+            margin-bottom: 16px;
+        }
+        
+        .reading-card.reversed {
+            border-color: rgba(236, 72, 153, 0.3);
+            background: linear-gradient(135deg, rgba(236, 72, 153, 0.1), rgba(107, 78, 230, 0.05));
+        }
+        
+        .position-label {
+            display: inline-block;
+            padding: 4px 12px;
+            background: rgba(107, 78, 230, 0.3);
+            border-radius: 20px;
+            font-size: 12px;
+            color: #fbbf24;
+            margin-bottom: 8px;
+        }
+        
+        .position-label.reversed {
+            background: rgba(236, 72, 153, 0.3);
+        }
+        
+        /* 塔罗指引 */
+        .guidance-box {
+            background: linear-gradient(135deg, rgba(251, 191, 36, 0.1), rgba(107, 78, 230, 0.1));
+            border: 1px solid rgba(251, 191, 36, 0.3);
+            border-radius: 16px;
+            padding: 24px;
+        }
+        
+        /* 风险提示 */
+        .risk-notice {
+            background: rgba(255, 193, 7, 0.1);
+            border: 1px solid rgba(255, 193, 7, 0.3);
+            border-radius: 12px;
+            padding: 16px 20px;
+            margin: 20px auto;
+            max-width: 800px;
+            text-align: center;
+            font-size: 13px;
+            color: rgba(255, 255, 255, 0.7);
+        }
+        
+        /* 历史记录 */
+        .history-item {
+            background: rgba(18, 18, 26, 0.6);
+            border: 1px solid rgba(107, 78, 230, 0.2);
+            border-radius: 12px;
+            padding: 14px;
+            margin-bottom: 10px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        
+        .history-item:hover {
+            border-color: rgba(107, 78, 230, 0.5);
+            background: rgba(107, 78, 230, 0.1);
+        }
+        
+        /* 滚动条 */
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: #0a0a0f; }
+        ::-webkit-scrollbar-thumb { background: #6b4ee6; border-radius: 3px; }
+        
+        /* 标题字体统一 */
+        .section-title {
+            font-family: 'Cinzel', serif;
+            font-size: 1.75rem;
+            font-weight: 600;
+        }
+        
+        @media (max-width: 768px) {
+            .section-title { font-size: 1.5rem; }
+            .tarot-card { width: 50px; height: 85px; }
+            .drawn-card { width: 80px; height: 135px; }
+        }
+    </style>
+</head>
+<body>
+    <!-- 液态背景 -->
+    <div class="liquid-bg">
+        <div class="liquid-blob blob-1"></div>
+        <div class="liquid-blob blob-2"></div>
+        <div class="liquid-blob blob-3"></div>
+    </div>
+    
+    <!-- 噪点纹理 -->
+    <div class="noise-overlay"></div>
+    
+    <!-- 星星背景 -->
+    <div class="stars" id="stars"></div>
+    
+    <!-- Vue App -->
+    <div id="app">
+        <!-- Hero Section -->
+        <section class="min-h-screen flex flex-col items-center justify-center relative px-4 py-10" ref="heroSection">
+            <div class="text-center mb-6">
+                <h1 class="section-title mb-4 bg-gradient-to-r from-mystic-purple via-mystic-violet to-mystic-pink bg-clip-text text-transparent">
+                    塔罗指引
+                </h1>
+                <p class="text-lg text-gray-400 font-light">Tarot Divination</p>
+                <p class="text-gray-500 text-sm mt-2 max-w-md mx-auto">探索命运的奥秘，在星辰的指引下寻找答案</p>
+            </div>
+            
+            <!-- 风险提示 -->
+            <div class="risk-notice">
+                ⚠️ 仅供自我觉察与娱乐参考，不构成医疗/法律/投资建议
+            </div>
+            
+            <!-- 78张塔罗牌弧形展示 -->
+            <div v-if="!hasDrawn" class="arc-container" ref="arcContainer">
+                <div 
+                    v-for="(card, index) in allCards" 
+                    :key="card.id"
+                    class="arc-card-wrapper"
+                    :style="getArcPosition(index)"
+                    @mouseenter="hoveredCard = index"
+                    @mouseleave="hoveredCard = null"
+                    @click="selectCard(index)"
+                >
+                    <div 
+                        class="tarot-card"
+                        :class="{ 
+                            'selected': selectedCardIndices.includes(index),
+                            'hovered': hoveredCard === index && !selectedCardIndices.includes(index)
+                        }"
+                    >
+                        <div class="card-face card-back">
+                            <div class="card-pattern" :style="getCardPattern(index)"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 已抽卡牌展示 -->
+            <div v-if="hasDrawn" class="drawn-cards-area">
+                <div 
+                    v-for="(card, index) in drawnCards"
+                    :key="index"
+                    class="drawn-card"
+                    :class="{ 'flipped': card.revealed }"
+                    @click="revealCard(index)"
+                >
+                    <div class="card-face card-back">
+                        <div class="card-pattern" :style="getCardPattern(allCards.findIndex(c => c.id === card.id))"></div>
+                    </div>
+                    <div class="card-face card-front">
+                        <div class="text-xs text-mystic-gold mb-1">{{ getPositionLabel(index) }}</div>
+                        <div class="font-bold text-sm text-white">{{ card.name }}</div>
+                        <div class="text-xs mt-2" :class="card.isReversed ? 'text-mystic-pink' : 'text-mystic-cyan'">
+                            {{ card.isReversed ? '逆位' : '正位' }}
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <p v-if="hasDrawn && !allCardsRevealed" class="text-gray-400 mt-6 text-sm">点击卡牌查看解读</p>
+            
+            <button 
+                v-if="!hasDrawn"
+                @click="scrollToReading"
+                class="mystic-btn mt-6"
+            >
+                开始占卜
+            </button>
+            
+            <button 
+                v-if="hasDrawn && allCardsRevealed"
+                @click="resetReading"
+                class="mystic-btn mt-6"
+                style="background: linear-gradient(135deg, #7c3aed, #8b5cf6);"
+            >
+                🔄 重新占卜
+            </button>
+        </section>
+        
+        <!-- 占卜设置区域 -->
+        <section v-if="!hasDrawn" class="py-16 px-4 flex items-center" id="reading-section" ref="readingSection">
+            <div class="max-w-xl mx-auto w-full">
+                <h2 class="section-title text-center mb-10 text-mystic-gold">
+                    寻求指引
+                </h2>
+                
+                <div class="glass-card rounded-2xl p-6">
+                    <!-- 你的问题 -->
+                    <div class="mb-6">
+                        <h3 class="text-lg font-semibold mb-3 flex items-center">
+                            <span class="w-7 h-7 rounded-full bg-mystic-purple flex items-center justify-center text-xs mr-2">1</span>
+                            你的问题
+                        </h3>
+                        <div class="mystic-input-wrapper">
+                            <input 
+                                v-model="question"
+                                type="text"
+                                class="mystic-input"
+                                placeholder="例如：我和TA的感情会如何发展？"
+                            >
+                            <div class="enter-icon">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2">
+                                    <path d="M9 10l-5 5 5 5M4 15h13a4 4 0 004-4V6"/>
+                                </svg>
+                            </div>
+                        </div>
+                        <p class="text-xs text-gray-500 mt-2">
+                            <span class="text-mystic-gold">小提示：</span>最好在近3个月
+                        </p>
+                    </div>
+                    
+                    <!-- 选择问题方向 -->
+                    <div class="mb-6">
+                        <h3 class="text-lg font-semibold mb-3 flex items-center">
+                            <span class="w-7 h-7 rounded-full bg-mystic-purple flex items-center justify-center text-xs mr-2">2</span>
+                            选择问题方向
+                        </h3>
+                        <div class="grid grid-cols-3 md:grid-cols-6 gap-2">
+                            <div 
+                                v-for="direction in directions"
+                                :key="direction.id"
+                                class="option-card"
+                                :class="{ 'selected': selectedDirection === direction.id }"
+                                @click="selectDirection(direction.id)"
+                            >
+                                <div class="text-lg mb-1">{{ direction.icon }}</div>
+                                <div class="text-xs font-medium">{{ direction.name }}</div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- 选择牌阵 -->
+                    <div class="mb-6">
+                        <h3 class="text-lg font-semibold mb-3 flex items-center">
+                            <span class="w-7 h-7 rounded-full bg-mystic-purple flex items-center justify-center text-xs mr-2">3</span>
+                            选择牌阵
+                        </h3>
+                        <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+                            <div 
+                                v-for="spread in spreads"
+                                :key="spread.id"
+                                class="option-card"
+                                :class="{ 'selected': selectedSpread === spread.id }"
+                                @click="selectSpread(spread.id)"
+                            >
+                                <div class="text-xl mb-1">{{ spread.cards }}张</div>
+                                <div class="font-medium text-sm">{{ spread.name }}</div>
+                                <div class="text-xs text-gray-500 mt-1">{{ spread.desc }}</div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- 开始占卜按钮 -->
+                    <div class="text-center">
+                        <button 
+                            @click="startReading"
+                            class="mystic-btn"
+                            :disabled="!canStart"
+                        >
+                            开始占卜
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </section>
+        
+        <!-- 解读结果区域 - 左右分栏 -->
+        <section v-if="hasDrawn && allCardsRevealed" class="py-12 px-4">
+            <h2 class="section-title text-center mb-8 text-mystic-gold">
+                塔罗解读
+            </h2>
+            
+            <!-- 问题摘要 -->
+            <div class="glass-card rounded-xl p-4 mb-8 max-w-3xl mx-auto">
+                <div class="flex flex-wrap gap-3 text-xs justify-center">
+                    <span class="px-3 py-1 bg-mystic-purple/30 rounded-full">问题：{{ question || '未填写' }}</span>
+                    <span class="px-3 py-1 bg-mystic-violet/30 rounded-full">方向：{{ getDirectionName() }}</span>
+                    <span class="px-3 py-1 bg-mystic-pink/30 rounded-full">牌阵：{{ getSpreadName() }}</span>
+                </div>
+            </div>
+            
+            <div class="reading-section">
+                <!-- 左侧：卡牌展示 -->
+                <div class="left-panel">
+                    <h3 class="text-lg font-semibold mb-4 text-center text-gray-300">牌阵</h3>
+                    <div class="flex flex-wrap justify-center gap-4">
+                        <div 
+                            v-for="(card, index) in drawnCards"
+                            :key="index"
+                            class="drawn-card"
+                            :class="{ 'flipped': card.revealed }"
+                        >
+                            <div class="card-face card-back">
+                            </div>
+                            <div class="card-face card-front">
+                                <div class="text-xs text-mystic-gold mb-1">{{ getPositionLabel(index) }}</div>
+                                <div class="font-bold text-sm text-white">{{ card.name }}</div>
+                                <div class="text-xs mt-2" :class="card.isReversed ? 'text-mystic-pink' : 'text-mystic-cyan'">
+                                    {{ card.isReversed ? '逆位' : '正位' }}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- 右侧：解读内容 -->
+                <div class="right-panel">
+                    <h3 class="text-lg font-semibold mb-4 text-gray-300">牌意解读</h3>
+                    
+                    <!-- 每张牌的解读 -->
+                    <div class="space-y-4 mb-6">
+                        <div 
+                            v-for="(card, index) in drawnCards"
+                            :key="index"
+                            class="reading-card"
+                            :class="{ 'reversed': card.isReversed }"
+                        >
+                            <div class="position-label" :class="{ 'reversed': card.isReversed }">
+                                {{ getPositionLabel(index) }} · {{ card.isReversed ? '逆位' : '正位' }}
+                            </div>
+                            <h4 class="text-base font-bold mb-2" :class="card.isReversed ? 'text-mystic-pink' : 'text-mystic-cyan'">
+                                {{ card.name }}
+                            </h4>
+                            <p class="text-gray-300 text-sm leading-relaxed">
+                                {{ getCardInterpretation(card) }}
+                            </p>
+                        </div>
+                    </div>
+                    
+                    <!-- 塔罗指引 -->
+                    <div class="guidance-box">
+                        <h4 class="text-base font-bold text-mystic-gold mb-3">✨ 综合塔罗指引</h4>
+                        <p class="text-gray-300 text-sm leading-relaxed">{{ generateGuidance() }}</p>
+                    </div>
+                    
+                    <!-- 操作按钮 -->
+                    <div class="flex flex-wrap justify-center gap-3 mt-6">
+                        <button @click="copyResult" class="mystic-btn text-sm py-2 px-4">
+                            📋 复制结果
+                        </button>
+                        <button @click="saveToHistory" class="mystic-btn text-sm py-2 px-4" style="background: linear-gradient(135deg, #059669, #10b981);">
+                            💾 保存记录
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </section>
+        
+        <!-- 历史记录 -->
+        <section class="py-12 px-4" v-if="readingHistory.length > 0">
+            <div class="max-w-3xl mx-auto">
+                <h2 class="section-title text-center mb-8 text-mystic-gold">
+                    历史记录
+                </h2>
+                <div class="glass-card rounded-2xl p-6">
+                    <div 
+                        v-for="(record, index) in readingHistory"
+                        :key="index"
+                        class="history-item"
+                        @click="loadHistory(record)"
+                    >
+                        <div class="flex justify-between items-start">
+                            <div>
+                                <div class="font-medium text-sm mb-1">{{ record.question || '未填写问题' }}</div>
+                                <div class="text-xs text-gray-500">
+                                    {{ record.direction }} · {{ record.spread }} · {{ record.date }}
+                                </div>
+                            </div>
+                            <button 
+                                @click.stop="deleteHistory(index)"
+                                class="text-gray-500 hover:text-red-400 transition-colors"
+                            >
+                                ✕
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+        
+        <!-- Footer -->
+        <footer class="py-8 px-4 text-center text-gray-600 text-sm">
+            <p>塔罗指引 · Tarot Divination</p>
+            <p class="mt-1 text-xs">探索内心，寻找答案</p>
+        </footer>
+    </div>
+
+    <script>
+        // ===== 塔罗牌数据配置 =====
+        const tarotData = {
+            majorArcana: [
+                { id: 0, name: "愚人", symbol: "🌟", upright: { general: "新的开始，冒险，纯真，自发性", love: "新的恋情即将开始，保持开放的心态", career: "新的工作机会，勇于尝试", wealth: "意外的收入，但需谨慎投资", study: "新的学习方向，保持好奇心", health: "精力充沛，注意不要太鲁莽" }, reversed: { general: "鲁莽，轻率，缺乏计划，冒险", love: "感情冲动，缺乏考虑", career: "工作变动过于草率", wealth: "投资失误，财务损失", study: "学习计划不周", health: "意外伤害，需要小心" } },
+                { id: 1, name: "魔术师", symbol: "🔮", upright: { general: "创造力，技能，意志力，自信", love: "主动追求，展现魅力", career: "能力得到认可，项目成功", wealth: "理财能力强，收入增加", study: "学习能力强，考试顺利", health: "身体状况良好，充满活力" }, reversed: { general: "欺骗，操纵，缺乏自信，技能不足", love: "感情中有欺骗", career: "能力不足，项目失败", wealth: "被骗钱财，投资失误", study: "学习方法不当", health: "精力不足，需要休息" } },
+                { id: 2, name: "女祭司", symbol: "🌙", upright: { general: "直觉，神秘，内在智慧，潜意识", love: "暗恋，直觉告诉你答案", career: "需要倾听内心，等待时机", wealth: "隐藏的财富机会", study: "需要深入思考，不要表面", health: "关注身心健康，冥想有益" }, reversed: { general: "忽视直觉，表面化，秘密暴露", love: "感情中的秘密被揭露", career: "错过机会，过于被动", wealth: "错失投资机会", study: "学习浮于表面", health: "忽视身体信号" } },
+                { id: 3, name: "女皇", symbol: "👑", upright: { general: "丰饶，母性，创造力，自然", love: "感情丰盛，可能怀孕", career: "项目蓬勃发展，收获颇丰", wealth: "财运亨通，收入稳定", study: "学习成果丰硕", health: "身体健康，生育力强" }, reversed: { general: "依赖，缺乏创造力，感情问题", love: "感情依赖，过度付出", career: "项目停滞，缺乏创新", wealth: "财务依赖他人", study: "学习缺乏动力", health: "妇科问题，需要关注" } },
+                { id: 4, name: "皇帝", symbol: "⚔️", upright: { general: "权威，稳定，结构，父性", love: "稳定的关系，责任感强", career: "职位提升，领导能力", wealth: "财务稳定，储蓄增加", study: "学习有条理，成绩稳定", health: "身体强健，注意压力" }, reversed: { general: "专制，僵化，滥用权力", love: "控制欲过强，关系紧张", career: "过于专制，团队不和", wealth: "财务控制不当", study: "学习方法僵化", health: "压力过大，需要放松" } },
+                { id: 5, name: "教皇", symbol: "📿", upright: { general: "传统，信仰，教育，指导", love: "传统价值观，稳定关系", career: "遵循规则，获得认可", wealth: "传统理财方式，稳健", study: "正规教育，成绩优异", health: "遵循医嘱，身体好转" }, reversed: { general: "反叛，非传统，打破规则", love: "非传统关系，挑战观念", career: "打破常规，创新思维", wealth: "非传统投资，高风险", study: "自学成才，不走寻常路", health: "尝试替代疗法" } },
+                { id: 6, name: "恋人", symbol: "💕", upright: { general: "爱情，和谐，选择，结合", love: "美好的恋情，灵魂伴侣", career: "合作伙伴关系良好", wealth: "共同理财，财务和谐", study: "学习兴趣浓厚", health: "身心和谐，健康状况佳" }, reversed: { general: "不和谐，错误选择，分离", love: "感情不和，面临分手", career: "合作关系破裂", wealth: "财务分歧", study: "学习选择错误", health: "身心失衡" } },
+                { id: 7, name: "战车", symbol: "🏆", upright: { general: "胜利，意志力，控制，前进", love: "主动追求，感情胜利", career: "事业成功，目标达成", wealth: "财运上升，投资获利", study: "考试成功，学业进步", health: "战胜疾病，恢复健康" }, reversed: { general: "失控，失败，缺乏方向", love: "感情失控，争吵不断", career: "项目失败，失去控制", wealth: "投资失败，财务失控", study: "考试失利", health: "病情反复" } },
+                { id: 8, name: "力量", symbol: "🦁", upright: { general: "勇气，耐心，内在力量", love: "以柔克刚，感情稳固", career: "以耐心克服困难", wealth: "稳健理财，积少成多", study: "持之以恒，终有收获", health: "身心强健，自愈力强" }, reversed: { general: "软弱，缺乏耐心，自我怀疑", love: "感情软弱，缺乏主见", career: "耐心不足，半途而废", wealth: "理财缺乏耐心", study: "学习缺乏毅力", health: "身体虚弱，缺乏信心" } },
+                { id: 9, name: "隐士", symbol: "🕯️", upright: { general: "内省，孤独，寻求真理，指导", love: "独处思考，需要空间", career: "独立工作，深入研究", wealth: "节俭储蓄，不张扬", study: "独自学习，深入钻研", health: "需要静养，自我调理" }, reversed: { general: "孤立，孤独，迷失方向", love: "过于孤立，感情疏远", career: "孤立无援，需要团队", wealth: "过于吝啬或浪费", study: "学习孤立，缺乏交流", health: "孤独导致身心问题" } },
+                { id: 10, name: "命运之轮", symbol: "☸️", upright: { general: "变化，命运，转折点，机遇", love: "感情转机，命中注定", career: "事业转折，机会来临", wealth: "财运变化，意外之财", study: "学习运势好转", health: "健康状况好转" }, reversed: { general: "坏运气，阻碍，循环", love: "感情不顺，缘分未到", career: "事业受阻，时机不对", wealth: "财运不佳，损失", study: "学习运势不佳", health: "病情反复" } },
+                { id: 11, name: "正义", symbol: "⚖️", upright: { general: "公正，真理，法律，因果", love: "公平对待，关系平衡", career: "公正评价，获得应得", wealth: "财务公正，合法收入", study: "考试公平，成绩真实", health: "身体平衡，注意调理" }, reversed: { general: "不公正，不诚实，逃避责任", love: "感情不公，一方付出过多", career: "遭遇不公，被误解", wealth: "财务纠纷，不合法", study: "考试作弊，成绩不实", health: "身体失衡" } },
+                { id: 12, name: "倒吊人", symbol: "🙃", upright: { general: "牺牲，等待，新视角，放手", love: "为爱情牺牲，等待时机", career: "事业停滞，需要等待", wealth: "财务暂停，不宜投资", study: "学习遇到瓶颈，需要换角度", health: "需要休息，暂停活动" }, reversed: { general: "抗拒改变，无谓牺牲，拖延", love: "不愿为感情付出", career: "抗拒变化，错失机会", wealth: "不愿止损，损失扩大", study: "固执己见，进步缓慢", health: "不愿休息，身体透支" } },
+                { id: 13, name: "死神", symbol: "💀", upright: { general: "结束，转变，新生，释放", love: "旧情结束，新情开始", career: "工作结束，新的开始", wealth: "财务周期结束", study: "学习阶段结束", health: "疾病结束，康复开始" }, reversed: { general: "抗拒结束，停滞，害怕改变", love: "不愿结束，纠缠不清", career: "不愿离职，工作停滞", wealth: "财务停滞，无法突破", study: "学习停滞", health: "病情反复，难以康复" } },
+                { id: 14, name: "节制", symbol: "🏺", upright: { general: "平衡，调和，耐心，适度", love: "感情平衡，相互理解", career: "工作与生活平衡", wealth: "收支平衡，稳健理财", study: "学习与娱乐平衡", health: "身心平衡，健康长寿" }, reversed: { general: "失衡，极端，缺乏节制", love: "感情失衡，一方付出过多", career: "工作与生活失衡", wealth: "收支失衡，入不敷出", study: "偏科严重", health: "身心失衡，健康受损" } },
+                { id: 15, name: "恶魔", symbol: "😈", upright: { general: "束缚，诱惑，物质主义，阴影", love: "被感情束缚，无法自拔", career: "被工作束缚，失去自由", wealth: "被金钱束缚，贪婪", study: "被学习压力束缚", health: "被不良习惯束缚" }, reversed: { general: "解脱，释放，摆脱束缚", love: "摆脱感情束缚", career: "摆脱工作束缚", wealth: "摆脱金钱束缚", study: "摆脱学习压力", health: "摆脱不良习惯" } },
+                { id: 16, name: "塔", symbol: "⚡", upright: { general: "突然改变，崩塌，觉醒，解放", love: "感情突变，关系崩塌", career: "事业突变，公司变动", wealth: "财务突变，损失", study: "学习突变，计划改变", health: "健康突变，注意意外" }, reversed: { general: "避免灾难，延迟改变，内在改变", love: "感情危机避免", career: "事业危机化解", wealth: "财务危机避免", study: "学习危机化解", health: "健康危机避免" } },
+                { id: 17, name: "星星", symbol: "✨", upright: { general: "希望，灵感，宁静，疗愈", love: "感情充满希望", career: "事业充满希望", wealth: "财务希望", study: "学习充满希望", health: "身体正在康复" }, reversed: { general: "绝望，失去信心，缺乏灵感", love: "感情绝望", career: "事业绝望", wealth: "财务绝望", study: "学习绝望", health: "康复缓慢" } },
+                { id: 18, name: "月亮", symbol: "🌜", upright: { general: "幻觉，恐惧，潜意识，不确定性", love: "感情不确定，有隐瞒", career: "事业不明朗，有隐患", wealth: "财务不明，有风险", study: "学习方向不明", health: "健康不明，需检查" }, reversed: { general: "真相大白，恐惧消散，清晰", love: "感情真相大白", career: "事业明朗化", wealth: "财务状况清晰", study: "学习方向明确", health: "健康状况明确" } },
+                { id: 19, name: "太阳", symbol: "☀️", upright: { general: "快乐，成功，活力，真理", love: "感情美满，幸福快乐", career: "事业成功，光明前景", wealth: "财运亨通，收入丰厚", study: "学业有成，成绩优异", health: "身体健康，精力充沛" }, reversed: { general: "暂时的沮丧，过度自信，延迟的成功", love: "感情小有波折", career: "事业小有阻碍", wealth: "财运稍有延迟", study: "学习小有挫折", health: "健康小有不适" } },
+                { id: 20, name: "审判", symbol: "📯", upright: { general: "重生，觉醒，救赎，评价", love: "感情重生，重新开始", career: "事业重生，新的机会", wealth: "财务重生，债务解决", study: "学习重生，重新开始", health: "健康重生，康复" }, reversed: { general: "自我怀疑，拒绝觉醒，逃避", love: "不愿面对感情问题", career: "不愿面对事业问题", wealth: "不愿面对财务问题", study: "不愿面对学习问题", health: "不愿面对健康问题" } },
+                { id: 21, name: "世界", symbol: "🌍", upright: { general: "完成，成就，整合，旅行", love: "感情圆满，修成正果", career: "事业圆满，目标达成", wealth: "财务圆满，财富自由", study: "学业圆满，顺利毕业", health: "健康圆满，身体康复" }, reversed: { general: "未完成，延迟，缺乏closure", love: "感情未圆满", career: "事业未圆满", wealth: "财务未圆满", study: "学业未圆满", health: "健康未完全康复" } }
+            ],
+            wands: [
+                { name: "权杖首牌", symbol: "🔥", upright: { general: "新的开始，创造力，灵感", love: "新的恋情，激情开始", career: "新项目，新机会", wealth: "新的收入来源", study: "新的学习方向", health: "精力充沛" }, reversed: { general: "延迟，缺乏灵感", love: "激情消退", career: "项目延迟", wealth: "收入延迟", study: "学习延迟", health: "精力不足" } },
+                { name: "权杖二", symbol: "🔥", upright: { general: "计划，决定，未来规划", love: "规划未来，关系升级", career: "职业规划，选择方向", wealth: "理财规划", study: "学习计划", health: "健康规划" }, reversed: { general: "害怕改变，犹豫不决", love: "害怕承诺", career: "职业犹豫", wealth: "投资犹豫", study: "学习犹豫", health: "健康忽视" } },
+                { name: "权杖三", symbol: "🔥", upright: { general: "远见，领导，探索", love: "感情发展，展望未来", career: "事业扩展，领导团队", wealth: "投资扩展", study: "学习扩展", health: "健康改善" }, reversed: { general: "障碍，延迟，缺乏远见", love: "感情障碍", career: "事业障碍", wealth: "投资障碍", study: "学习障碍", health: "健康问题" } },
+                { name: "权杖四", symbol: "🔥", upright: { general: "庆祝，和谐，稳定", love: "感情稳定，值得庆祝", career: "事业稳定，团队和谐", wealth: "财务稳定", study: "学习稳定", health: "健康稳定" }, reversed: { general: "不稳定，缺乏支持", love: "感情不稳定", career: "事业不稳定", wealth: "财务不稳定", study: "学习不稳定", health: "健康不稳定" } },
+                { name: "权杖五", symbol: "🔥", upright: { general: "冲突，竞争，挑战", love: "感情竞争，争吵", career: "职场竞争", wealth: "财务竞争", study: "学习竞争", health: "健康挑战" }, reversed: { general: "避免冲突，和解", love: "避免争吵", career: "避免竞争", wealth: "避免财务纠纷", study: "避免学习竞争", health: "避免健康风险" } },
+                { name: "权杖六", symbol: "🔥", upright: { general: "胜利，成功，认可", love: "感情胜利，获得认可", career: "事业成功，获得晋升", wealth: "财务成功", study: "学习成功", health: "健康好转" }, reversed: { general: "延迟的成功，骄傲", love: "感情骄傲", career: "事业骄傲", wealth: "财务骄傲", study: "学习骄傲", health: "健康骄傲" } },
+                { name: "权杖七", symbol: "🔥", upright: { general: "防御，坚持，勇气", love: "捍卫感情", career: "捍卫事业", wealth: "捍卫财务", study: "坚持学习", health: "坚持健康" }, reversed: { general: "放弃", love: "放弃感情", career: "放弃事业", wealth: "放弃财务", study: "放弃学习", health: "放弃健康" } },
+                { name: "权杖八", symbol: "🔥", upright: { general: "快速行动，进展，旅行", love: "感情快速发展", career: "事业快速发展", wealth: "财务快速增长", study: "学习快速进步", health: "健康快速恢复" }, reversed: { general: "延迟，阻碍", love: "感情延迟", career: "事业延迟", wealth: "财务延迟", study: "学习延迟", health: "健康恢复延迟" } },
+                { name: "权杖九", symbol: "🔥", upright: { general: "韧性，准备，防御", love: "感情坚持", career: "事业坚持", wealth: "财务坚持", study: "学习坚持", health: "健康坚持" }, reversed: { general: "疲惫，放弃", love: "感情疲惫", career: "事业疲惫", wealth: "财务疲惫", study: "学习疲惫", health: "健康疲惫" } },
+                { name: "权杖十", symbol: "🔥", upright: { general: "负担，责任，压力", love: "感情负担", career: "事业负担", wealth: "财务负担", study: "学习负担", health: "健康负担" }, reversed: { general: "释放负担，寻求帮助", love: "释放感情负担", career: "释放事业负担", wealth: "释放财务负担", study: "释放学习负担", health: "释放健康负担" } },
+                { name: "权杖侍从", symbol: "🔥", upright: { general: "探索，新想法，热情", love: "新的感情探索", career: "新的工作想法", wealth: "新的投资机会", study: "新的学习方法", health: "新的健康计划" }, reversed: { general: "缺乏方向，冲动", love: "感情冲动", career: "工作冲动", wealth: "投资冲动", study: "学习冲动", health: "健康冲动" } },
+                { name: "权杖骑士", symbol: "🔥", upright: { general: "行动，冒险，热情", love: "主动追求", career: "积极行动", wealth: "积极投资", study: "积极学习", health: "积极锻炼" }, reversed: { general: "冲动，鲁莽", love: "感情鲁莽", career: "工作鲁莽", wealth: "投资鲁莽", study: "学习鲁莽", health: "健康鲁莽" } },
+                { name: "权杖王后", symbol: "🔥", upright: { general: "自信，独立，热情", love: "自信的魅力", career: "自信的领导力", wealth: "自信的理财", study: "自信的学习", health: "自信的健康" }, reversed: { general: "专横，嫉妒", love: "感情专横", career: "工作专横", wealth: "财务嫉妒", study: "学习嫉妒", health: "健康嫉妒" } },
+                { name: "权杖国王", symbol: "🔥", upright: { general: "领导力，远见，创业", love: "感情领导力", career: "事业领导力", wealth: "创业成功", study: "学习领导力", health: "健康领导力" }, reversed: { general: "专制，冲动", love: "感情专制", career: "工作专制", wealth: "投资专制", study: "学习专制", health: "健康专制" } }
+            ],
+            cups: [
+                { name: "圣杯首牌", symbol: "🌊", upright: { general: "新的感情，爱，直觉", love: "新的恋情，真爱", career: "工作满足", wealth: "情感价值", study: "学习兴趣", health: "情绪健康" }, reversed: { general: "感情阻塞，情感压抑", love: "感情不顺", career: "工作不满", wealth: "情感缺失", study: "学习无趣", health: "情绪问题" } },
+                { name: "圣杯二", symbol: "🌊", upright: { general: "合作，和谐，关系", love: "和谐的关系", career: "合作愉快", wealth: "共同理财", study: "合作学习", health: "身心和谐" }, reversed: { general: "不和谐，分离", love: "关系不和", career: "合作破裂", wealth: "财务分歧", study: "学习分歧", health: "身心不和" } },
+                { name: "圣杯三", symbol: "🌊", upright: { general: "庆祝，友谊，社交", love: "社交中的感情", career: "团队庆祝", wealth: "社交收益", study: "学习小组", health: "社交健康" }, reversed: { general: "过度社交，孤立", love: "感情过度", career: "过度庆祝", wealth: "社交过度", study: "学习过度", health: "社交孤立" } },
+                { name: "圣杯四", symbol: "🌊", upright: { general: "沉思，不满，重新评估", love: "感情反思", career: "工作反思", wealth: "财务反思", study: "学习反思", health: "健康反思" }, reversed: { general: "觉醒，新的意识", love: "感情觉醒", career: "工作觉醒", wealth: "财务觉醒", study: "学习觉醒", health: "健康觉醒" } },
+                { name: "圣杯五", symbol: "🌊", upright: { general: "失落，悲伤，失望", love: "感情失落", career: "工作失落", wealth: "财务失落", study: "学习失落", health: "健康失落" }, reversed: { general: "接受，继续前进", love: "接受失去", career: "接受失败", wealth: "接受损失", study: "接受挫折", health: "接受现实" } },
+                { name: "圣杯六", symbol: "🌊", upright: { general: "怀旧，童年，回忆", love: "旧情复燃", career: "旧工作回忆", wealth: "旧财务回忆", study: "旧学习回忆", health: "童年健康" }, reversed: { general: "活在当下，向前看", love: "不念旧情", career: "不念旧工作", wealth: "不念旧财务", study: "不念旧学习", health: "关注当下" } },
+                { name: "圣杯七", symbol: "🌊", upright: { general: "选择，幻想，梦想", love: "感情选择", career: "工作选择", wealth: "投资选择", study: "学习选择", health: "健康选择" }, reversed: { general: "清晰，决定", love: "感情决定", career: "工作决定", wealth: "投资决定", study: "学习决定", health: "健康决定" } },
+                { name: "圣杯八", symbol: "🌊", upright: { general: "离开，寻求更多，放弃", love: "离开旧感情", career: "离开旧工作", wealth: "放弃旧投资", study: "改变学习方式", health: "改变健康方式" }, reversed: { general: "恐惧改变，停滞", love: "害怕离开", career: "害怕离职", wealth: "害怕改变", study: "害怕改变", health: "害怕改变" } },
+                { name: "圣杯九", symbol: "🌊", upright: { general: "满足，愿望实现，幸福", love: "感情满足", career: "工作满足", wealth: "财务满足", study: "学习满足", health: "健康满足" }, reversed: { general: "不满，贪婪", love: "感情不满", career: "工作不满", wealth: "财务不满", study: "学习不满", health: "健康不满" } },
+                { name: "圣杯十", symbol: "🌊", upright: { general: "家庭幸福，和谐，满足", love: "家庭幸福", career: "工作家庭平衡", wealth: "家庭财务和谐", study: "家庭支持", health: "家庭健康" }, reversed: { general: "家庭不和，破裂", love: "家庭感情问题", career: "工作家庭冲突", wealth: "家庭财务问题", study: "家庭学习冲突", health: "家庭健康问题" } },
+                { name: "圣杯侍从", symbol: "🌊", upright: { general: "新的情感，直觉，创造力", love: "新的感情消息", career: "新的工作想法", wealth: "新的投资机会", study: "新的学习兴趣", health: "新的健康意识" }, reversed: { general: "情感不成熟，幻想", love: "感情幻想", career: "工作幻想", wealth: "投资幻想", study: "学习幻想", health: "健康幻想" } },
+                { name: "圣杯骑士", symbol: "🌊", upright: { general: "浪漫，魅力，追求", love: "浪漫追求", career: "浪漫工作", wealth: "浪漫投资", study: "浪漫学习", health: "浪漫健康" }, reversed: { general: "逃避，不诚实", love: "感情逃避", career: "工作逃避", wealth: "投资逃避", study: "学习逃避", health: "健康逃避" } },
+                { name: "圣杯王后", symbol: "🌊", upright: { general: "同情，直觉，情感丰富", love: "感情丰富", career: "工作同理心", wealth: "情感投资", study: "情感学习", health: "情感健康" }, reversed: { general: "过度情绪化，依赖", love: "感情依赖", career: "工作情绪化", wealth: "情绪化投资", study: "情绪化学习", health: "情绪化健康" } },
+                { name: "圣杯国王", symbol: "🌊", upright: { general: "情感控制，同情，智慧", love: "感情智慧", career: "工作智慧", wealth: "理财智慧", study: "学习智慧", health: "健康智慧" }, reversed: { general: "情感操纵，冷漠", love: "感情操纵", career: "工作操纵", wealth: "财务操纵", study: "学习操纵", health: "健康冷漠" } }
+            ],
+            swords: [
+                { name: "宝剑首牌", symbol: "⚔️", upright: { general: "新的想法，突破", love: "感情清晰", career: "工作突破", wealth: "投资清晰", study: "学习突破", health: "健康清晰" }, reversed: { general: "混乱，缺乏清晰", love: "感情混乱", career: "工作混乱", wealth: "投资混乱", study: "学习混乱", health: "健康混乱" } },
+                { name: "宝剑二", symbol: "⚔️", upright: { general: "僵局，选择困难", love: "感情僵局", career: "工作僵局", wealth: "投资僵局", study: "学习僵局", health: "健康僵局" }, reversed: { general: "做出决定", love: "感情决定", career: "工作决定", wealth: "投资决定", study: "学习决定", health: "健康决定" } },
+                { name: "宝剑三", symbol: "⚔️", upright: { general: "心碎，悲伤，痛苦", love: "感情痛苦", career: "工作痛苦", wealth: "财务痛苦", study: "学习痛苦", health: "健康痛苦" }, reversed: { general: "恢复，原谅", love: "感情恢复", career: "工作恢复", wealth: "财务恢复", study: "学习恢复", health: "健康恢复" } },
+                { name: "宝剑四", symbol: "⚔️", upright: { general: "休息，恢复，沉思", love: "感情休息", career: "工作休息", wealth: "财务休息", study: "学习休息", health: "健康休息" }, reversed: { general: "不安，焦虑", love: "感情焦虑", career: "工作焦虑", wealth: "财务焦虑", study: "学习焦虑", health: "健康焦虑" } },
+                { name: "宝剑五", symbol: "⚔️", upright: { general: "冲突，胜利", love: "感情冲突", career: "工作冲突", wealth: "财务冲突", study: "学习冲突", health: "健康冲突" }, reversed: { general: "和解，妥协", love: "感情和解", career: "工作和解", wealth: "财务和解", study: "学习和解", health: "健康和解" } },
+                { name: "宝剑六", symbol: "⚔️", upright: { general: "过渡，移动", love: "感情过渡", career: "工作过渡", wealth: "财务过渡", study: "学习过渡", health: "健康过渡" }, reversed: { general: "困难过渡", love: "感情抗拒", career: "工作抗拒", wealth: "财务抗拒", study: "学习抗拒", health: "健康抗拒" } },
+                { name: "宝剑七", symbol: "⚔️", upright: { general: "欺骗，策略", love: "感情欺骗", career: "工作欺骗", wealth: "财务欺骗", study: "学习欺骗", health: "健康欺骗" }, reversed: { general: "坦白，重新开始", love: "感情坦白", career: "工作坦白", wealth: "财务坦白", study: "学习坦白", health: "健康坦白" } },
+                { name: "宝剑八", symbol: "⚔️", upright: { general: "限制，束缚", love: "感情束缚", career: "工作束缚", wealth: "财务束缚", study: "学习束缚", health: "健康束缚" }, reversed: { general: "解放，自由", love: "感情解放", career: "工作解放", wealth: "财务解放", study: "学习解放", health: "健康解放" } },
+                { name: "宝剑九", symbol: "⚔️", upright: { general: "焦虑，噩梦", love: "感情焦虑", career: "工作焦虑", wealth: "财务焦虑", study: "学习焦虑", health: "健康焦虑" }, reversed: { general: "希望，释放焦虑", love: "感情希望", career: "工作希望", wealth: "财务希望", study: "学习希望", health: "健康希望" } },
+                { name: "宝剑十", symbol: "⚔️", upright: { general: "结束，痛苦结束", love: "感情结束", career: "工作结束", wealth: "财务结束", study: "学习结束", health: "健康结束" }, reversed: { general: "恢复，新生", love: "感情新生", career: "工作新生", wealth: "财务新生", study: "学习新生", health: "健康新生" } },
+                { name: "宝剑侍从", symbol: "⚔️", upright: { general: "好奇，新想法", love: "感情沟通", career: "工作沟通", wealth: "投资想法", study: "学习想法", health: "健康想法" }, reversed: { general: "欺骗，八卦", love: "感情八卦", career: "工作八卦", wealth: "投资八卦", study: "学习八卦", health: "健康八卦" } },
+                { name: "宝剑骑士", symbol: "⚔️", upright: { general: "行动，冲动", love: "感情果断", career: "工作果断", wealth: "投资果断", study: "学习果断", health: "健康果断" }, reversed: { general: "鲁莽，愤怒", love: "感情鲁莽", career: "工作鲁莽", wealth: "投资鲁莽", study: "学习鲁莽", health: "健康鲁莽" } },
+                { name: "宝剑王后", symbol: "⚔️", upright: { general: "独立，清晰", love: "感情理性", career: "工作理性", wealth: "理财理性", study: "学习理性", health: "健康理性" }, reversed: { general: "冷酷，刻薄", love: "感情冷酷", career: "工作冷酷", wealth: "财务冷酷", study: "学习冷酷", health: "健康冷酷" } },
+                { name: "宝剑国王", symbol: "⚔️", upright: { general: "权威，真理", love: "感情权威", career: "工作权威", wealth: "理财权威", study: "学习权威", health: "健康权威" }, reversed: { general: "暴政，操纵", love: "感情操纵", career: "工作操纵", wealth: "财务操纵", study: "学习操纵", health: "健康操纵" } }
+            ],
+            pentacles: [
+                { name: "星币首牌", symbol: "💎", upright: { general: "新的机会", love: "感情稳定", career: "新工作机会", wealth: "新收入来源", study: "学习机会", health: "健康机会" }, reversed: { general: "错失机会", love: "感情错失", career: "工作错失", wealth: "财务错失", study: "学习错失", health: "健康错失" } },
+                { name: "星币二", symbol: "💎", upright: { general: "平衡，时间管理", love: "感情平衡", career: "工作平衡", wealth: "财务平衡", study: "学习平衡", health: "健康平衡" }, reversed: { general: "失衡", love: "感情失衡", career: "工作失衡", wealth: "财务失衡", study: "学习失衡", health: "健康失衡" } },
+                { name: "星币三", symbol: "💎", upright: { general: "团队合作", love: "感情合作", career: "团队合作", wealth: "合作理财", study: "合作学习", health: "健康合作" }, reversed: { general: "缺乏团队合作", love: "感情缺乏合作", career: "工作缺乏合作", wealth: "财务缺乏合作", study: "学习缺乏合作", health: "健康缺乏合作" } },
+                { name: "星币四", symbol: "💎", upright: { general: "控制，稳定", love: "感情控制", career: "工作控制", wealth: "财务控制", study: "学习控制", health: "健康控制" }, reversed: { general: "贪婪", love: "感情贪婪", career: "工作贪婪", wealth: "财务贪婪", study: "学习贪婪", health: "健康贪婪" } },
+                { name: "星币五", symbol: "💎", upright: { general: "困难，贫困", love: "感情困难", career: "工作困难", wealth: "财务困难", study: "学习困难", health: "健康困难" }, reversed: { general: "恢复", love: "感情恢复", career: "工作恢复", wealth: "财务恢复", study: "学习恢复", health: "健康恢复" } },
+                { name: "星币六", symbol: "💎", upright: { general: "给予，慷慨", love: "感情给予", career: "工作给予", wealth: "财务给予", study: "学习给予", health: "健康给予" }, reversed: { general: "债务", love: "感情自私", career: "工作自私", wealth: "财务自私", study: "学习自私", health: "健康自私" } },
+                { name: "星币七", symbol: "💎", upright: { general: "耐心，评估", love: "感情耐心", career: "工作耐心", wealth: "投资耐心", study: "学习耐心", health: "健康耐心" }, reversed: { general: "焦虑", love: "感情焦虑", career: "工作焦虑", wealth: "投资焦虑", study: "学习焦虑", health: "健康焦虑" } },
+                { name: "星币八", symbol: "💎", upright: { general: "技能发展", love: "感情技能", career: "工作技能", wealth: "理财技能", study: "学习技能", health: "健康技能" }, reversed: { general: "缺乏专注", love: "感情缺乏专注", career: "工作缺乏专注", wealth: "理财缺乏专注", study: "学习缺乏专注", health: "健康缺乏专注" } },
+                { name: "星币九", symbol: "💎", upright: { general: "独立", love: "感情独立", career: "工作独立", wealth: "财务独立", study: "学习独立", health: "健康独立" }, reversed: { general: "依赖", love: "感情依赖", career: "工作依赖", wealth: "财务依赖", study: "学习依赖", health: "健康依赖" } },
+                { name: "星币十", symbol: "💎", upright: { general: "财富，家庭", love: "家庭财富", career: "事业成功", wealth: "财富传承", study: "学业成功", health: "家庭健康" }, reversed: { general: "财务失败", love: "家庭感情问题", career: "事业失败", wealth: "财务失败", study: "学业失败", health: "家庭健康问题" } },
+                { name: "星币侍从", symbol: "💎", upright: { general: "新的机会", love: "新感情机会", career: "新工作机会", wealth: "新投资机会", study: "新学习机会", health: "新健康机会" }, reversed: { general: "缺乏进展", love: "感情白日梦", career: "工作白日梦", wealth: "投资白日梦", study: "学习白日梦", health: "健康白日梦" } },
+                { name: "星币骑士", symbol: "💎", upright: { general: "勤奋，可靠", love: "感情可靠", career: "工作可靠", wealth: "理财可靠", study: "学习可靠", health: "健康可靠" }, reversed: { general: "懒惰", love: "感情懒惰", career: "工作懒惰", wealth: "理财懒惰", study: "学习懒惰", health: "健康懒惰" } },
+                { name: "星币王后", symbol: "💎", upright: { general: "nurturing", love: "感情nurturing", career: "工作nurturing", wealth: "理财nurturing", study: "学习nurturing", health: "健康nurturing" }, reversed: { general: "过度保护", love: "感情过度保护", career: "工作过度保护", wealth: "财务不安全", study: "学习过度保护", health: "健康过度保护" } },
+                { name: "星币国王", symbol: "💎", upright: { general: "成功，领导力", love: "感情成功", career: "事业成功", wealth: "财务成功", study: "学业成功", health: "健康成功" }, reversed: { general: "财务失败", love: "感情物质主义", career: "事业失败", wealth: "财务失败", study: "学业失败", health: "健康失败" } }
+            ]
+        };
+
+        const { createApp, ref, computed, onMounted } = Vue;
+
+        createApp({
+            setup() {
+                const question = ref('');
+                const selectedDirection = ref('');
+                const selectedSpread = ref('');
+                const hasDrawn = ref(false);
+                const drawnCards = ref([]);
+                const readingHistory = ref([]);
+                const hoveredCard = ref(null);
+                const selectedCardIndices = ref([]);
+                const heroSection = ref(null);
+                const readingSection = ref(null);
+                
+                const directions = [
+                    { id: 'love', name: '感情', icon: '💕' },
+                    { id: 'career', name: '事业', icon: '💼' },
+                    { id: 'wealth', name: '财运', icon: '💰' },
+                    { id: 'study', name: '学业', icon: '📚' },
+                    { id: 'health', name: '健康', icon: '💪' },
+                    { id: 'general', name: '综合', icon: '✨' }
+                ];
+                
+                const spreads = [
+                    { id: 'single', name: '单张牌', cards: 1, desc: '快速指引' },
+                    { id: 'three', name: '三张牌', cards: 3, desc: '过去现在未来' },
+                    { id: 'five', name: '五张牌', cards: 5, desc: '深度解读' },
+                    { id: 'celtic', name: '凯尔特十字', cards: 10, desc: '全面分析' }
+                ];
+                
+                const positionNames = {
+                    single: ['指引'],
+                    three: ['过去', '现在', '未来'],
+                    five: ['现状', '挑战', '过去', '未来', '结果'],
+                    celtic: ['现状', '挑战', '基础', '过去', '未来', '自我', '环境', '希望', '结果', '结局']
+                };
+                
+                // 生成所有78张牌
+                const allCards = computed(() => {
+                    const cards = [];
+                    // 大阿卡纳
+                    tarotData.majorArcana.forEach(card => {
+                        cards.push({ ...card, type: 'major', id: `major_${card.id}` });
+                    });
+                    // 小阿卡纳
+                    ['wands', 'cups', 'swords', 'pentacles'].forEach(suit => {
+                        tarotData[suit].forEach((card, idx) => {
+                            cards.push({ ...card, type: 'minor', suit, id: `${suit}_${idx}` });
+                        });
+                    });
+                    return cards;
+                });
+                
+                const canStart = computed(() => {
+                    return question.value.trim() && selectedDirection.value && selectedSpread.value;
+                });
+                
+                const allCardsRevealed = computed(() => {
+                    return drawnCards.value.length > 0 && drawnCards.value.every(card => card.revealed);
+                });
+                
+                // 计算弧形位置
+                const getArcPosition = (index) => {
+                    const total = 78;
+                    const arcAngle = 120; // 弧形角度
+                    const startAngle = -arcAngle / 2;
+                    const angleStep = arcAngle / (total - 1);
+                    const angle = startAngle + index * angleStep;
+                    const radian = (angle * Math.PI) / 180;
+                    
+                    const radius = 350;
+                    const x = Math.sin(radian) * radius;
+                    const y = Math.abs(Math.cos(radian) * radius * 0.3);
+                    
+                    return {
+                        transform: `translateX(${x}px) translateY(${-y}px) rotate(${angle}deg)`,
+                        zIndex: Math.round(100 - Math.abs(angle))
+                    };
+                };
+                
+                // 每张牌的独特图案
+                const getCardPattern = () => {
+                    // 统一的背面抽象纹理（不显示牌名/符号），避免“挑牌”
+                    return {
+                        background: [
+                            'radial-gradient(circle at 30% 30%, rgba(251,191,36,0.16), transparent 58%)',
+                            'radial-gradient(circle at 70% 65%, rgba(107,78,230,0.18), transparent 60%)',
+                            'linear-gradient(45deg, rgba(255,255,255,0.05), transparent 55%)'
+                        ].join(','),
+                        position: 'absolute',
+                        inset: 0,
+                        opacity: 0.35
+                    };
+                };
+                };
+                
+                const selectDirection = (id) => {
+                    selectedDirection.value = id;
+                };
+                
+                const selectSpread = (id) => {
+                    selectedSpread.value = id;
+                };
+                
+                const getDirectionName = () => {
+                    const dir = directions.find(d => d.id === selectedDirection.value);
+                    return dir ? dir.name : '综合';
+                };
+                
+                const getSpreadName = () => {
+                    const spread = spreads.find(s => s.id === selectedSpread.value);
+                    return spread ? spread.name : '单张牌';
+                };
+                
+                const getPositionLabel = (index) => {
+                    const spread = spreads.find(s => s.id === selectedSpread.value);
+                    if (!spread) return '指引';
+                    const positions = positionNames[spread.id] || ['指引'];
+                    return positions[index] || `位置 ${index + 1}`;
+                };
+                
+                const scrollToReading = () => {
+                    readingSection.value.scrollIntoView({ behavior: 'smooth' });
+                };
+                
+                const selectCard = (index) => {
+                    if (hasDrawn.value) return;
+                    // 可以添加预选效果
+                };
+                
+                const startReading = () => {
+                    if (!canStart.value) return;
+                    
+                    heroSection.value.scrollIntoView({ behavior: 'smooth' });
+                    
+                    setTimeout(() => {
+                        performDraw();
+                    }, 600);
+                };
+                
+                const performDraw = () => {
+                    hasDrawn.value = true;
+                    
+                    const spread = spreads.find(s => s.id === selectedSpread.value);
+                    const cardCount = spread ? spread.cards : 1;
+                    
+                    drawnCards.value = [];
+                    const shuffled = [...allCards.value].sort(() => Math.random() - 0.5);
+                    
+                    for (let i = 0; i < cardCount; i++) {
+                        const card = shuffled[i];
+                        drawnCards.value.push({
+                            ...card,
+                            isReversed: Math.random() > 0.7,
+                            revealed: false
+                        });
+                    }
+                };
+                
+                const revealCard = (index) => {
+                    if (drawnCards.value[index]) {
+                        drawnCards.value[index].revealed = true;
+                    }
+                };
+                
+                const getCardInterpretation = (card) => {
+                    const direction = selectedDirection.value || 'general';
+                    const position = card.isReversed ? 'reversed' : 'upright';
+                    
+                    if (card[position] && card[position][direction]) {
+                        return card[position][direction];
+                    }
+                    if (card[position] && card[position].general) {
+                        return card[position].general;
+                    }
+                    return card.isReversed ? '逆位解读' : '正位解读';
+                };
+                
+                const generateGuidance = () => {
+                    const direction = selectedDirection.value || 'general';
+                    const directionNames = {
+                        love: '感情', career: '事业', wealth: '财运',
+                        study: '学业', health: '健康', general: '人生'
+                    };
+                    
+                    const positiveCards = drawnCards.value.filter(c => !c.isReversed).length;
+                    const reversedCards = drawnCards.value.filter(c => c.isReversed).length;
+                    
+                    let guidance = `根据本次${directionNames[direction]}占卜，`;
+                    
+                    if (positiveCards > reversedCards) {
+                        guidance += `整体趋势向好。正位牌较多表明你目前处于有利的能量场中，`;
+                    } else if (reversedCards > positiveCards) {
+                        guidance += `需要更多耐心与调整。逆位牌较多提示你可能面临一些挑战，`;
+                    } else {
+                        guidance += `能量处于平衡状态。正逆位牌数量相当，表明这是一个转折点，`;
+                    }
+                    
+                    if (direction === 'love') {
+                        guidance += `在感情方面，建议你保持真诚与开放的心态，相信自己的直觉。`;
+                    } else if (direction === 'career') {
+                        guidance += `在事业上，建议你保持专注与坚持，机会总是留给有准备的人。`;
+                    } else if (direction === 'wealth') {
+                        guidance += `在财务方面，建议你理性规划，避免冲动消费或投资。`;
+                    } else if (direction === 'study') {
+                        guidance += `在学业上，建议你制定明确目标，保持持续学习的热情。`;
+                    } else if (direction === 'health') {
+                        guidance += `在健康方面，建议你关注身心平衡，适当休息与运动。`;
+                    } else {
+                        guidance += `在人生道路上，保持正念，相信一切都会朝着最好的方向发展。`;
+                    }
+                    
+                    guidance += `记住，塔罗牌只是指引，真正的改变来自于你的行动与选择。愿星辰指引你的道路。✨`;
+                    
+                    return guidance;
+                };
+                
+                const copyResult = () => {
+                    const direction = getDirectionName();
+                    const spread = getSpreadName();
+                    
+                    let result = `# 塔罗占卜结果\n\n`;
+                    result += `**问题：** ${question.value || '未填写'}\n`;
+                    result += `**方向：** ${direction}\n`;
+                    result += `**牌阵：** ${spread}\n\n`;
+                    result += `## 牌面解读\n\n`;
+                    
+                    drawnCards.value.forEach((card, index) => {
+                        result += `### ${getPositionLabel(index)} - ${card.name}（${card.isReversed ? '逆位' : '正位'}）\n`;
+                        result += `${getCardInterpretation(card)}\n\n`;
+                    });
+                    
+                    result += `## 塔罗指引\n\n`;
+                    result += `${generateGuidance()}\n\n`;
+                    result += `---\n*占卜时间：${new Date().toLocaleString()}*`;
+                    
+                    navigator.clipboard.writeText(result).then(() => {
+                        alert('结果已复制到剪贴板！');
+                    });
+                };
+                
+                const saveToHistory = () => {
+                    const record = {
+                        question: question.value,
+                        direction: getDirectionName(),
+                        spread: getSpreadName(),
+                        cards: drawnCards.value.map(c => ({
+                            name: c.name,
+                            isReversed: c.isReversed,
+                            position: getPositionLabel(drawnCards.value.indexOf(c))
+                        })),
+                        date: new Date().toLocaleString()
+                    };
+                    
+                    readingHistory.value.unshift(record);
+                    localStorage.setItem('tarotHistory', JSON.stringify(readingHistory.value));
+                    alert('已保存到历史记录！');
+                };
+                
+                const loadHistory = (record) => {
+                    question.value = record.question;
+                    selectedDirection.value = directions.find(d => d.name === record.direction)?.id || 'general';
+                    selectedSpread.value = spreads.find(s => s.name === record.spread)?.id || 'single';
+                    
+                    drawnCards.value = record.cards.map(c => {
+                        const cardData = allCards.value.find(card => card.name === c.name);
+                        return {
+                            ...cardData,
+                            isReversed: c.isReversed,
+                            revealed: true
+                        };
+                    });
+                    
+                    hasDrawn.value = true;
+                    heroSection.value.scrollIntoView({ behavior: 'smooth' });
+                };
+                
+                const deleteHistory = (index) => {
+                    readingHistory.value.splice(index, 1);
+                    localStorage.setItem('tarotHistory', JSON.stringify(readingHistory.value));
+                };
+                
+                const resetReading = () => {
+                    question.value = '';
+                    selectedDirection.value = '';
+                    selectedSpread.value = '';
+                    hasDrawn.value = false;
+                    drawnCards.value = [];
+                    selectedCardIndices.value = [];
+                };
+                
+                const createStars = () => {
+                    const starsContainer = document.getElementById('stars');
+                    for (let i = 0; i < 80; i++) {
+                        const star = document.createElement('div');
+                        star.className = 'star';
+                        star.style.left = Math.random() * 100 + '%';
+                        star.style.top = Math.random() * 100 + '%';
+                        star.style.animationDelay = Math.random() * 3 + 's';
+                        star.style.opacity = Math.random() * 0.5 + 0.2;
+                        starsContainer.appendChild(star);
+                    }
+                };
+                
+                onMounted(() => {
+                    createStars();
+                    const saved = localStorage.getItem('tarotHistory');
+                    if (saved) {
+                        readingHistory.value = JSON.parse(saved);
+                    }
+                });
+                
+                return {
+                    question,
+                    selectedDirection,
+                    selectedSpread,
+                    hasDrawn,
+                    drawnCards,
+                    readingHistory,
+                    hoveredCard,
+                    selectedCardIndices,
+                    allCards,
+                    directions,
+                    spreads,
+                    canStart,
+                    allCardsRevealed,
+                    heroSection,
+                    readingSection,
+                    getArcPosition,
+                    getCardPattern,
+                    selectDirection,
+                    selectSpread,
+                    getDirectionName,
+                    getSpreadName,
+                    getPositionLabel,
+                    scrollToReading,
+                    selectCard,
+                    startReading,
+                    revealCard,
+                    getCardInterpretation,
+                    generateGuidance,
+                    copyResult,
+                    saveToHistory,
+                    loadHistory,
+                    deleteHistory,
+                    resetReading
+                };
+            }
+        }).mount('#app');
+    </script>
+</body>
+</html>
