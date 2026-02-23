@@ -954,6 +954,25 @@
                 const readingHistory = ref([]);
                 const hoveredCard = ref(null);
                 const selectedCardIndices = ref([]);
+
+                const isShuffling = ref(false);
+                const isDrawing = ref(false);
+                const shuffleCountdown = ref(0);
+                let shuffleTimerId = null;
+
+                const selectedOrbitIndices = ref([]); // 用户在 orbit 上点选的卡牌索引
+
+                const requiredCardCount = computed(() => {
+                  const spread = spreads.find(s => s.id === selectedSpread.value);
+                  return spread ? spread.cards : 0;
+                });
+
+                const clearShuffleTimer = () => {
+                  if (shuffleTimerId) {
+                    clearInterval(shuffleTimerId);
+                    shuffleTimerId = null;
+                  }
+                };
                 const heroSection = ref(null);
                 const readingSection = ref(null);
                 
@@ -1169,15 +1188,73 @@
                     if (hasDrawn.value) return;
                     // 可以添加预选效果
                 };
+
+                const onOrbitCardClick = (index) => {
+                  if (hasDrawn.value) return;
+                  if (isShuffling.value) return;
+                  if (!isDrawing.value) return;
+                
+                  const max = requiredCardCount.value;
+                  if (!max) return;
+                
+                  // 再点取消
+                  const existing = selectedOrbitIndices.value.indexOf(index);
+                  if (existing !== -1) {
+                    selectedOrbitIndices.value.splice(existing, 1);
+                    return;
+                  }
+                
+                  if (selectedOrbitIndices.value.length >= max) return;
+                
+                  selectedOrbitIndices.value.push(index);
+                
+                  // 抽满：生成 drawnCards，锁定其它牌（通过 hasDrawn 隐藏 orbit 区，等价不可点）
+                  if (selectedOrbitIndices.value.length === max) {
+                    const picked = selectedOrbitIndices.value.map(i => orbitCards.value[i]).filter(Boolean);
+                
+                    drawnCards.value = picked.map(card => ({
+                      ...card,
+                      isReversed: Math.random() > 0.7,
+                      revealed: false
+                    }));
+                
+                    isDrawing.value = false;
+                    isShuffling.value = false;
+                    shuffleCountdown.value = 0;
+                    clearShuffleTimer();
+                
+                    selectedOrbitIndices.value = [];
+                    hasDrawn.value = true;
+                  }
+                };
                 
                 const startReading = () => {
-                    if (!canStart.value) return;
-                    
-                    heroSection.value.scrollIntoView({ behavior: 'smooth' });
-                    
-                    setTimeout(() => {
-                        performDraw();
-                    }, 600);
+                  if (!canStart.value) return; // 保持原禁用逻辑
+                
+                  // 回首屏
+                  heroSection.value.scrollIntoView({ behavior: 'smooth' });
+                
+                  // 重置抽牌
+                  hasDrawn.value = false;
+                  drawnCards.value = [];
+                  selectedOrbitIndices.value = [];
+                
+                  // 洗牌 3 秒倒计时（顺时针运动由 motion-path 驱动，洗牌只调快 --dur）
+                  isDrawing.value = false;
+                  isShuffling.value = true;
+                  shuffleCountdown.value = 3;
+                
+                  clearShuffleTimer();
+                  shuffleTimerId = setInterval(() => {
+                    shuffleCountdown.value -= 1;
+                
+                    if (shuffleCountdown.value <= 0) {
+                      clearShuffleTimer();
+                      shuffleCountdown.value = 0;
+                      isShuffling.value = false;
+                      isDrawing.value = true; // 进入抽牌阶段
+                    }
+                  }, 1000);
                 };
                 
                 const performDraw = () => {
@@ -1333,6 +1410,12 @@
                     setTimeout(() => {
                       startOrbit();
                     }, 50);
+
+                    isShuffling.value = false;
+                    isDrawing.value = false;
+                    shuffleCountdown.value = 0;
+                    selectedOrbitIndices.value = [];
+                    clearShuffleTimer();
                 };
                 
                 const createStars = () => {
@@ -1401,6 +1484,7 @@
                     scrollToReading,
                     selectCard,
                     startReading,
+                    // performDraw, // 移除自动抽牌
                     revealCard,
                     getCardInterpretation,
                     generateGuidance,
@@ -1408,10 +1492,55 @@
                     saveToHistory,
                     loadHistory,
                     deleteHistory,
-                    resetReading
+                    resetReading,
+                    isShuffling,
+                    isDrawing,
+                    shuffleCountdown,
+                    requiredCardCount,
+                    selectedOrbitIndices,
+                    onOrbitCardClick
                 };
             }
         }).mount('#app');
     </script>
 </body>
 </html>
+
+/* === Shuffle / Draw UX (perf-friendly) === */
+.arc-container.shuffling{
+  animation: shuffleSpin 0.9s linear infinite; /* 顺时针 */
+  transform-origin: 50% 80%;
+  will-change: transform;
+}
+@keyframes shuffleSpin{
+  from{ transform: rotate(0deg); }
+  to  { transform: rotate(360deg); }
+}
+
+/* 抽牌阶段才允许“看起来可点” */
+.arc-container.drawing .arc-card-wrapper{
+  cursor: pointer;
+}
+
+/* 牌背不显示牌名/符号（避免挑牌） */
+.card-back .card-symbol,
+.card-back .card-name{
+  display: none !important;
+}
+
+/* 顶部牌堆提示 */
+.deck-hint{
+  margin-top: 10px;
+  text-align: center;
+  font-size: 14px;
+  color: rgba(229,231,235,.92);
+}
+.deck-hint .hint-strong{
+  color: #fbbf24;
+  font-weight: 700;
+}
+.deck-hint .hint-sub{
+  margin-top: 4px;
+  font-size: 12px;
+  color: rgba(156,163,175,.92);
+}
