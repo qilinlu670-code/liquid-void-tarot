@@ -192,7 +192,7 @@
         
         /* 卡牌背面 - 神秘图案 */
         .card-back {
-            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%), repeating-linear-gradient(45deg, rgba(255,255,255,0.04) 0px, rgba(255,255,255,0.04) 2px, transparent 2px, transparent 8px);
             border: 1px solid rgba(107, 78, 230, 0.5);
         }
         
@@ -528,8 +528,6 @@
                         }"
                     >
                         <div class="card-face card-back">
-                            <div class="card-symbol">{{ card.symbol }}</div>
-                            <div class="card-name">{{ card.name }}</div>
                             <div class="card-pattern" :style="getCardPattern(index)"></div>
                         </div>
                     </div>
@@ -546,13 +544,10 @@
                     @click="revealCard(index)"
                 >
                     <div class="card-face card-back">
-                        <div class="card-symbol">{{ card.symbol }}</div>
-                        <div class="card-name">{{ card.name }}</div>
                         <div class="card-pattern" :style="getCardPattern(allCards.findIndex(c => c.id === card.id))"></div>
                     </div>
                     <div class="card-face card-front">
                         <div class="text-xs text-mystic-gold mb-1">{{ getPositionLabel(index) }}</div>
-                        <div class="card-symbol">{{ card.symbol }}</div>
                         <div class="font-bold text-sm text-white">{{ card.name }}</div>
                         <div class="text-xs mt-2" :class="card.isReversed ? 'text-mystic-pink' : 'text-mystic-cyan'">
                             {{ card.isReversed ? '逆位' : '正位' }}
@@ -695,12 +690,9 @@
                             :class="{ 'flipped': card.revealed }"
                         >
                             <div class="card-face card-back">
-                                <div class="card-symbol">{{ card.symbol }}</div>
-                                <div class="card-name">{{ card.name }}</div>
                             </div>
                             <div class="card-face card-front">
                                 <div class="text-xs text-mystic-gold mb-1">{{ getPositionLabel(index) }}</div>
-                                <div class="card-symbol">{{ card.symbol }}</div>
                                 <div class="font-bold text-sm text-white">{{ card.name }}</div>
                                 <div class="text-xs mt-2" :class="card.isReversed ? 'text-mystic-pink' : 'text-mystic-cyan'">
                                     {{ card.isReversed ? '逆位' : '正位' }}
@@ -967,19 +959,19 @@
                 };
                 
                 // 每张牌的独特图案
-                const getCardPattern = (index) => {
-                    const hue = (index * 4.6) % 360;
-                    const patterns = [
-                        `radial-gradient(circle at 30% 30%, hsla(${hue}, 70%, 50%, 0.3), transparent)`,
-                        `linear-gradient(${index * 10}deg, hsla(${hue}, 60%, 40%, 0.2), transparent)`,
-                        `conic-gradient(from ${index * 5}deg at 50% 50%, hsla(${hue}, 70%, 50%, 0.2), transparent, hsla(${(hue + 180) % 360}, 70%, 50%, 0.2))`
-                    ];
+                const getCardPattern = () => {
+                    // 统一的背面抽象纹理（不显示牌名/符号），避免“挑牌”
                     return {
-                        background: patterns[index % 3],
+                        background: [
+                            'radial-gradient(circle at 30% 30%, rgba(251,191,36,0.16), transparent 58%)',
+                            'radial-gradient(circle at 70% 65%, rgba(107,78,230,0.18), transparent 60%)',
+                            'linear-gradient(45deg, rgba(255,255,255,0.05), transparent 55%)'
+                        ].join(','),
                         position: 'absolute',
                         inset: 0,
-                        opacity: 0.4
+                        opacity: 0.35
                     };
+                };
                 };
                 
                 const selectDirection = (id) => {
