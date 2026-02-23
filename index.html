@@ -254,25 +254,39 @@
           width: 100%;
           max-width: 1100px;
           margin: 10px auto 0;
-          overflow: hidden;
+          overflow: visible;          /* 关键：不裁剪，去掉那条横线 */
+          padding-bottom: 48px;       /* 给按钮留空间，避免重叠 */
         }
 
         .orbit-container {
           position: relative;
           width: 100%;
-          height: 320px;
+          height: 400px;              /* 关键：增高容器，让牌完整落在容器内 */
           perspective: 900px;
           transform-style: preserve-3d;
+          transform-origin: 50% 56%;  /* 旋转中心略靠下，更像环绕 */
+          animation: orbitSpin 16s linear infinite; /* 顺时针匀速一直转 */
+          will-change: transform;
+          contain: layout paint;      /* 降低对外部布局影响 */
+        }
+        @keyframes orbitSpin {
+          from { transform: rotateZ(0deg); }
+          to   { transform: rotateZ(360deg); }
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .orbit-container { animation: none; }
         }
 
         .orbit-card {
           position: absolute;
           left: 50%;
-          top: 60%;
+          top: 52%;                   /* 关键：整体上移，避免压到按钮区 */
           transform-style: preserve-3d;
           will-change: transform;
-          pointer-events: none; /* 首页只展示，不抢点击 */
-          filter: drop-shadow(0 12px 22px rgba(0,0,0,0.45));
+          pointer-events: none;
+          backface-visibility: hidden;
+          box-shadow: 0 12px 22px rgba(0,0,0,0.45); /* 用 box-shadow 替代 filter */
+          filter: none !important;
         }
 
         /* 只在首页旋转牌阵里隐藏牌名/符号（避免用户挑牌） */
@@ -282,8 +296,8 @@
         }
 
         @media (max-width: 768px) {
-          .orbit-container { height: 260px; }
-          .orbit-card { top: 62%; }
+          .orbit-container { height: 340px; }
+          .orbit-card { top: 54%; }
         }
         
         /* 已抽卡牌区域 */
@@ -954,8 +968,8 @@
                   const el = orbitContainer.value;
                   if (!el) return;
                   const w = el.clientWidth || window.innerWidth;
-                  orbitA = Math.min(460, w * 0.46);
-                  orbitB = Math.max(70, Math.min(130, w * 0.12));
+                  orbitA = Math.min(500, w * 0.46);
+                  orbitB = Math.max(56, Math.min(110, w * 0.09));
                 };
 
                 const layoutOrbitOnce = (rotation = 0) => {
@@ -991,31 +1005,14 @@
 
                 const startOrbit = () => {
                   if (orbitRafId) cancelAnimationFrame(orbitRafId);
+                  orbitRafId = null;
                   updateOrbitMetrics();
-
-                  const reduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-                  if (reduced) {
-                    layoutOrbitOnce(0);
-                    return;
-                  }
-
-                  const speed = 0.00055; // rad/ms 约 34°/秒（想更慢就调小）
-                  const start = performance.now();
-
-                  const tick = (t) => {
-                    // v-if 切走后 ref 会变 null，直接停掉动画
-                    if (!orbitContainer.value) return;
-
-                    const rotation = (t - start) * speed;
-                    layoutOrbitOnce(rotation);
-                    orbitRafId = requestAnimationFrame(tick);
-                  };
-
-                  orbitRafId = requestAnimationFrame(tick);
+                  layoutOrbitOnce(0); // 只摆位一次，旋转交给 CSS animation
                 };
 
                 const handleOrbitResize = () => {
                   updateOrbitMetrics();
+                  layoutOrbitOnce(0);
                 };
                 
                 const directions = [
