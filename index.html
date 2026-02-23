@@ -254,39 +254,49 @@
           width: 100%;
           max-width: 1100px;
           margin: 10px auto 0;
-          overflow: visible;          /* 关键：不裁剪，去掉那条横线 */
-          padding-bottom: 48px;       /* 给按钮留空间，避免重叠 */
+          overflow: visible;          /* 不裁剪，去掉横线 */
+          padding-bottom: 20px;       /* 给按钮留空间 */
         }
 
         .orbit-container {
           position: relative;
           width: 100%;
-          height: 400px;              /* 关键：增高容器，让牌完整落在容器内 */
+          height: 360px;              /* 容器高度：短半轴*2 + 牌高 + 余量 */
           perspective: 900px;
           transform-style: preserve-3d;
-          transform-origin: 50% 56%;  /* 旋转中心略靠下，更像环绕 */
-          animation: orbitSpin 16s linear infinite; /* 顺时针匀速一直转 */
-          will-change: transform;
-          contain: layout paint;      /* 降低对外部布局影响 */
-        }
-        @keyframes orbitSpin {
-          from { transform: rotateZ(0deg); }
-          to   { transform: rotateZ(360deg); }
-        }
-        @media (prefers-reduced-motion: reduce) {
-          .orbit-container { animation: none; }
+          /* 注意：不再用 CSS animation 整体旋转，改为 JS rAF 逐帧驱动每张牌 */
+          overflow: visible;
         }
 
-        .orbit-card {
+        /* orbit-item：负责运动定位，绝对居中于容器中心 */
+        .orbit-item {
           position: absolute;
           left: 50%;
-          top: 52%;                   /* 关键：整体上移，避免压到按钮区 */
+          top: 50%;
+          width: 0;
+          height: 0;
           transform-style: preserve-3d;
           will-change: transform;
           pointer-events: none;
+        }
+
+        /* orbit-card：只负责显示，相对 orbit-item 居中 */
+        .orbit-card {
+          position: absolute;
+          left: 50%;
+          top: 50%;
+          transform: translate(-50%, -50%) !important;  /* 不受 tarot-card hover 影响 */
+          transform-style: preserve-3d;
           backface-visibility: hidden;
-          box-shadow: 0 12px 22px rgba(0,0,0,0.45); /* 用 box-shadow 替代 filter */
-          filter: none !important;
+          box-shadow: 0 12px 22px rgba(0,0,0,0.45);
+          pointer-events: none;
+          transition: none !important;  /* 禁止 transition 干扰光滑动画 */
+          cursor: default;
+        }
+        .orbit-card:hover {
+          transform: translate(-50%, -50%) !important;  /* 覆盖 tarot-card:hover */
+          z-index: inherit;
+          box-shadow: 0 12px 22px rgba(0,0,0,0.45);
         }
 
         /* 只在首页旋转牌阵里隐藏牌名/符号（避免用户挑牌） */
@@ -295,9 +305,12 @@
           display: none;
         }
 
+        @media (prefers-reduced-motion: reduce) {
+          .orbit-item { animation: none !important; }
+        }
+
         @media (max-width: 768px) {
-          .orbit-container { height: 340px; }
-          .orbit-card { top: 54%; }
+          .orbit-container { height: 300px; }
         }
         
         /* 已抽卡牌区域 */
@@ -560,19 +573,21 @@
                 ⚠️ 仅供自我觉察与娱乐参考，不构成医疗/法律/投资建议
             </div>
             
-            <!-- 首页：椭圆旋转牌阵展示 -->
+            <!-- 首页：椭圆轨道顺时针转动（每张牌在跑） -->
             <div v-if="!hasDrawn" class="orbit-wrap">
               <div class="orbit-container" ref="orbitContainer">
                 <div
                   v-for="(card, index) in orbitCards"
                   :key="`orbit_${index}`"
-                  class="tarot-card orbit-card"
-                  :ref="setOrbitCardRef"
+                  class="orbit-item"
+                  :ref="setOrbitItemRef"
                 >
-                  <div class="card-face card-back">
-                    <div class="card-symbol">{{ card.symbol }}</div>
-                    <div class="card-name">{{ card.name }}</div>
-                    <div class="card-pattern" :style="getCardPattern(index)"></div>
+                  <div class="tarot-card orbit-card">
+                    <div class="card-face card-back">
+                      <div class="card-symbol">{{ card.symbol }}</div>
+                      <div class="card-name">{{ card.name }}</div>
+                      <div class="card-pattern" :style="getCardPattern(index)"></div>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -942,17 +957,17 @@
                 const heroSection = ref(null);
                 const readingSection = ref(null);
                 
-                // ===== 首页椭圆旋转牌阵 =====
+                // ===== 首页椭圆轨道牌阵（每张牌独立运动） =====
                 const orbitContainer = ref(null);
-                const orbitCardEls = ref([]);
+                const orbitItemEls = ref([]);  // orbit-item 元素列表
                 const orbitCount = ref(44);
 
                 onBeforeUpdate(() => {
-                  orbitCardEls.value = [];
+                  orbitItemEls.value = [];
                 });
 
-                const setOrbitCardRef = (el) => {
-                  if (el) orbitCardEls.value.push(el);
+                const setOrbitItemRef = (el) => {
+                  if (el) orbitItemEls.value.push(el);
                 };
 
                 // 首页旋转展示用：不需要渲染 78 张，减少性能压力
@@ -961,58 +976,82 @@
                 });
 
                 let orbitRafId = null;
-                let orbitA = 420; // 椭圆长半轴
-                let orbitB = 115; // 椭圆短半轴
+                let orbitStartTime = null;
+                let orbitA = 420; // 椭圆长半轴（水平）
+                let orbitB = 110; // 椭圆短半轴（垂直）
+                const ORBIT_PERIOD = 18000; // ms，一圈用时，越大越慢
 
                 const updateOrbitMetrics = () => {
                   const el = orbitContainer.value;
                   if (!el) return;
                   const w = el.clientWidth || window.innerWidth;
-                  orbitA = Math.min(500, w * 0.46);
-                  orbitB = Math.max(56, Math.min(110, w * 0.09));
+                  orbitA = Math.min(480, w * 0.44);
+                  orbitB = Math.max(55, Math.min(115, w * 0.09));
                 };
 
-                const layoutOrbitOnce = (rotation = 0) => {
-                  const els = orbitCardEls.value;
-                  const n = els.length || 1;
+                // 每张牌的初始角度均匀分布在椭圆上
+                // 顺时针： theta 随时间递增，即 x=A*cos(theta), y=B*sin(theta)
+                // 在数学坐标系中，顺时针方向对应 theta 递减，
+                // 但屏幕 y 轴向下，所以 theta 递增就是顺时针。
+                const animateOrbit = (timestamp) => {
+                  if (!orbitStartTime) orbitStartTime = timestamp;
+                  const elapsed = timestamp - orbitStartTime;
+
+                  const els = orbitItemEls.value;
+                  const n = els.length;
+                  if (n === 0) {
+                    orbitRafId = requestAnimationFrame(animateOrbit);
+                    return;
+                  }
+
+                  // 全局转过的角度（顺时针）
+                  const globalAngle = (elapsed / ORBIT_PERIOD) * Math.PI * 2;
 
                   for (let i = 0; i < n; i++) {
-                    const theta = (i / n) * Math.PI * 2 + rotation;
+                    // 每张牌的初始角度，均匀分布
+                    const initAngle = (i / n) * Math.PI * 2;
+                    // 当前角度 = 初始角度 + 全局旋转角（顺时针）
+                    const theta = initAngle + globalAngle;
 
+                    // 椭圆上的位置
                     const x = orbitA * Math.cos(theta);
                     const y = orbitB * Math.sin(theta);
 
-                    // depth: 0(远) -> 1(近)，用于层级/缩放/透明度
+                    // depth: sin(theta) 从 -1（远）到 1（近）
                     const depth = (Math.sin(theta) + 1) / 2;
                     const scale = 0.55 + depth * 0.45;
 
-                    const rotateZ = (theta * 180) / Math.PI + 90;  // 沿轨道切线方向
-                    const rotateY = Math.cos(theta) * 18;          // 轻微 3D 倾斜
-                    const rotateX = -Math.sin(theta) * 10;
+                    // 牌面朝向轨道切线（让牌看起来像在滚动）
+                    const rotateZ = (theta * 180) / Math.PI + 90;
+                    const rotateY = Math.cos(theta) * 18;  // 轻微 3D 倾斜
+                    const rotateX = -Math.sin(theta) * 8;
 
                     const zIndex = Math.round(depth * 1000);
                     const opacity = 0.35 + depth * 0.65;
 
-                    const card = els[i];
-                    card.style.transform =
-                      `translate(-50%, -50%) translate3d(${x}px, ${y}px, 0) ` +
+                    const item = els[i];
+                    // orbit-item 负责定位，不需要 translate(-50%,-50%)（已由 CSS left/top:50% 实现）
+                    item.style.transform =
+                      `translate3d(${x}px, ${y}px, 0) ` +
                       `rotateZ(${rotateZ}deg) rotateY(${rotateY}deg) rotateX(${rotateX}deg) ` +
                       `scale(${scale})`;
-                    card.style.zIndex = String(zIndex);
-                    card.style.opacity = String(opacity);
+                    item.style.zIndex = String(zIndex);
+                    item.style.opacity = String(opacity);
                   }
+
+                  orbitRafId = requestAnimationFrame(animateOrbit);
                 };
 
                 const startOrbit = () => {
                   if (orbitRafId) cancelAnimationFrame(orbitRafId);
                   orbitRafId = null;
+                  orbitStartTime = null;
                   updateOrbitMetrics();
-                  layoutOrbitOnce(0); // 只摆位一次，旋转交给 CSS animation
+                  orbitRafId = requestAnimationFrame(animateOrbit);
                 };
 
                 const handleOrbitResize = () => {
                   updateOrbitMetrics();
-                  layoutOrbitOnce(0);
                 };
                 
                 const directions = [
@@ -1290,6 +1329,10 @@
                     hasDrawn.value = false;
                     drawnCards.value = [];
                     selectedCardIndices.value = [];
+                    // orbit-wrap 重新显示，需要重启 rAF
+                    setTimeout(() => {
+                      startOrbit();
+                    }, 50);
                 };
                 
                 const createStars = () => {
@@ -1347,7 +1390,7 @@
                     readingSection,
                     orbitContainer,
                     orbitCards,
-                    setOrbitCardRef,
+                    setOrbitItemRef,
                     getArcPosition,
                     getCardPattern,
                     selectDirection,
