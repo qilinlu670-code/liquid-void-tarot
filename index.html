@@ -249,6 +249,43 @@
             transition: all 0.3s ease;
         }
         
+        /* 首页椭圆旋转牌阵（仅展示用） */
+        .orbit-wrap {
+          width: 100%;
+          max-width: 1100px;
+          margin: 10px auto 0;
+          overflow: hidden;
+        }
+
+        .orbit-container {
+          position: relative;
+          width: 100%;
+          height: 320px;
+          perspective: 900px;
+          transform-style: preserve-3d;
+        }
+
+        .orbit-card {
+          position: absolute;
+          left: 50%;
+          top: 60%;
+          transform-style: preserve-3d;
+          will-change: transform;
+          pointer-events: none; /* 首页只展示，不抢点击 */
+          filter: drop-shadow(0 12px 22px rgba(0,0,0,0.45));
+        }
+
+        /* 只在首页旋转牌阵里隐藏牌名/符号（避免用户挑牌） */
+        .orbit-container .card-symbol,
+        .orbit-container .card-name {
+          display: none;
+        }
+
+        @media (max-width: 768px) {
+          .orbit-container { height: 260px; }
+          .orbit-card { top: 62%; }
+        }
+        
         /* 已抽卡牌区域 */
         .drawn-cards-area {
             display: flex;
@@ -509,31 +546,22 @@
                 ⚠️ 仅供自我觉察与娱乐参考，不构成医疗/法律/投资建议
             </div>
             
-            <!-- 78张塔罗牌弧形展示 -->
-            <div v-if="!hasDrawn" class="arc-container" ref="arcContainer">
-                <div 
-                    v-for="(card, index) in allCards" 
-                    :key="card.id"
-                    class="arc-card-wrapper"
-                    :style="getArcPosition(index)"
-                    @mouseenter="hoveredCard = index"
-                    @mouseleave="hoveredCard = null"
-                    @click="selectCard(index)"
+            <!-- 首页：椭圆旋转牌阵展示 -->
+            <div v-if="!hasDrawn" class="orbit-wrap">
+              <div class="orbit-container" ref="orbitContainer">
+                <div
+                  v-for="(card, index) in orbitCards"
+                  :key="`orbit_${index}`"
+                  class="tarot-card orbit-card"
+                  :ref="setOrbitCardRef"
                 >
-                    <div 
-                        class="tarot-card"
-                        :class="{ 
-                            'selected': selectedCardIndices.includes(index),
-                            'hovered': hoveredCard === index && !selectedCardIndices.includes(index)
-                        }"
-                    >
-                        <div class="card-face card-back">
-                            <div class="card-symbol">{{ card.symbol }}</div>
-                            <div class="card-name">{{ card.name }}</div>
-                            <div class="card-pattern" :style="getCardPattern(index)"></div>
-                        </div>
-                    </div>
+                  <div class="card-face card-back">
+                    <div class="card-symbol">{{ card.symbol }}</div>
+                    <div class="card-name">{{ card.name }}</div>
+                    <div class="card-pattern" :style="getCardPattern(index)"></div>
+                  </div>
                 </div>
+              </div>
             </div>
             
             <!-- 已抽卡牌展示 -->
@@ -885,7 +913,7 @@
             ]
         };
 
-        const { createApp, ref, computed, onMounted } = Vue;
+        const { createApp, ref, computed, onMounted, onBeforeUpdate, onUnmounted } = Vue;
 
         createApp({
             setup() {
@@ -899,6 +927,96 @@
                 const selectedCardIndices = ref([]);
                 const heroSection = ref(null);
                 const readingSection = ref(null);
+                
+                // ===== 首页椭圆旋转牌阵 =====
+                const orbitContainer = ref(null);
+                const orbitCardEls = ref([]);
+                const orbitCount = ref(44);
+
+                onBeforeUpdate(() => {
+                  orbitCardEls.value = [];
+                });
+
+                const setOrbitCardRef = (el) => {
+                  if (el) orbitCardEls.value.push(el);
+                };
+
+                // 首页旋转展示用：不需要渲染 78 张，减少性能压力
+                const orbitCards = computed(() => {
+                  return allCards.value.slice(0, orbitCount.value);
+                });
+
+                let orbitRafId = null;
+                let orbitA = 420; // 椭圆长半轴
+                let orbitB = 115; // 椭圆短半轴
+
+                const updateOrbitMetrics = () => {
+                  const el = orbitContainer.value;
+                  if (!el) return;
+                  const w = el.clientWidth || window.innerWidth;
+                  orbitA = Math.min(460, w * 0.46);
+                  orbitB = Math.max(70, Math.min(130, w * 0.12));
+                };
+
+                const layoutOrbitOnce = (rotation = 0) => {
+                  const els = orbitCardEls.value;
+                  const n = els.length || 1;
+
+                  for (let i = 0; i < n; i++) {
+                    const theta = (i / n) * Math.PI * 2 + rotation;
+
+                    const x = orbitA * Math.cos(theta);
+                    const y = orbitB * Math.sin(theta);
+
+                    // depth: 0(远) -> 1(近)，用于层级/缩放/透明度
+                    const depth = (Math.sin(theta) + 1) / 2;
+                    const scale = 0.55 + depth * 0.45;
+
+                    const rotateZ = (theta * 180) / Math.PI + 90;  // 沿轨道切线方向
+                    const rotateY = Math.cos(theta) * 18;          // 轻微 3D 倾斜
+                    const rotateX = -Math.sin(theta) * 10;
+
+                    const zIndex = Math.round(depth * 1000);
+                    const opacity = 0.35 + depth * 0.65;
+
+                    const card = els[i];
+                    card.style.transform =
+                      `translate(-50%, -50%) translate3d(${x}px, ${y}px, 0) ` +
+                      `rotateZ(${rotateZ}deg) rotateY(${rotateY}deg) rotateX(${rotateX}deg) ` +
+                      `scale(${scale})`;
+                    card.style.zIndex = String(zIndex);
+                    card.style.opacity = String(opacity);
+                  }
+                };
+
+                const startOrbit = () => {
+                  if (orbitRafId) cancelAnimationFrame(orbitRafId);
+                  updateOrbitMetrics();
+
+                  const reduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+                  if (reduced) {
+                    layoutOrbitOnce(0);
+                    return;
+                  }
+
+                  const speed = 0.00055; // rad/ms 约 34°/秒（想更慢就调小）
+                  const start = performance.now();
+
+                  const tick = (t) => {
+                    // v-if 切走后 ref 会变 null，直接停掉动画
+                    if (!orbitContainer.value) return;
+
+                    const rotation = (t - start) * speed;
+                    layoutOrbitOnce(rotation);
+                    orbitRafId = requestAnimationFrame(tick);
+                  };
+
+                  orbitRafId = requestAnimationFrame(tick);
+                };
+
+                const handleOrbitResize = () => {
+                  updateOrbitMetrics();
+                };
                 
                 const directions = [
                     { id: 'love', name: '感情', icon: '💕' },
@@ -1196,6 +1314,22 @@
                     if (saved) {
                         readingHistory.value = JSON.parse(saved);
                     }
+                    
+                    // 初始化首页旋转牌阵
+                    const w = window.innerWidth;
+                    orbitCount.value = w < 420 ? 24 : (w < 768 ? 32 : 44);
+
+                    // 等 DOM/ref 就绪再启动
+                    setTimeout(() => {
+                      startOrbit();
+                    }, 50);
+
+                    window.addEventListener('resize', handleOrbitResize, { passive: true });
+                });
+
+                onUnmounted(() => {
+                  if (orbitRafId) cancelAnimationFrame(orbitRafId);
+                  window.removeEventListener('resize', handleOrbitResize);
                 });
                 
                 return {
@@ -1214,6 +1348,9 @@
                     allCardsRevealed,
                     heroSection,
                     readingSection,
+                    orbitContainer,
+                    orbitCards,
+                    setOrbitCardRef,
                     getArcPosition,
                     getCardPattern,
                     selectDirection,
