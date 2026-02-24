@@ -305,6 +305,46 @@
           display: none;
         }
 
+        /* === Drawing phase: freeze orbit for better clicking === */
+        .orbit-container.drawing .orbit-item{
+          animation-play-state: paused !important; /* 直接暂停 motion-path */
+        }
+
+        /* 若你的动画写在 .orbit-card 而非 .orbit-item，也补这一条： */
+        .orbit-container.drawing .orbit-card{
+          animation-play-state: paused !important;
+        }
+
+        /* 允许点击（保留你已有 pointer-events 规则，但确保 drawing 阶段最终可点） */
+        .orbit-container.drawing .orbit-item{
+          pointer-events: auto !important;
+          cursor: pointer;
+        }
+        .orbit-container.drawing .orbit-item *{
+          pointer-events: auto !important;
+        }
+
+        /* 抽牌阶段 hover 高亮（轻量：transform+opacity+box-shadow，避免 drop-shadow/filter） */
+        .orbit-container.drawing .orbit-item:hover{
+          z-index: 3;
+        }
+        .orbit-container.drawing .orbit-item:hover .orbit-card{
+          transform: translateZ(0) translateY(-6px) scale(1.04) !important;
+          box-shadow: 0 18px 34px rgba(0,0,0,.55);
+          opacity: 1;
+        }
+
+        /* 点击确认瞬间（可选：给一个 pressed 反馈） */
+        .orbit-container.drawing .orbit-item:active .orbit-card{
+          transform: translateZ(0) translateY(-2px) scale(1.02) !important;
+        }
+
+        /* 已抽走的牌：变淡并不可点 */
+        .orbit-item.picked{
+          opacity: .20;
+          pointer-events: none !important;
+        }
+
         @media (prefers-reduced-motion: reduce) {
           .orbit-item { animation: none !important; }
         }
@@ -559,22 +599,6 @@
         /* 只有抽牌阶段允许点 */
         .orbit-item{ pointer-events:none; }
 
-        .orbit-container.drawing .orbit-item{
-          pointer-events:auto !important;
-          cursor:pointer;
-        }
-
-        .orbit-container.drawing .orbit-item *{
-          pointer-events:auto !important;
-          cursor:pointer;
-        }
-
-        /* 选中态轻提示（不用 drop-shadow，避免掉帧） */
-        .orbit-item.selected .orbit-card{
-          transform: translate(-50%, -50%) scale(1.04) !important;
-          box-shadow: 0 14px 26px rgba(0,0,0,.5);
-        }
-
         .orbit-container.shuffling{
           --dur: 5s; /* 比 6s 再快一点更像洗 */
           animation: shuffleWobble 0.28s ease-in-out infinite alternate;
@@ -615,10 +639,7 @@
           transform: scale(1.04);
         }
 
-        /* picked: 被抽走后在牌堆里变淡，避免重复点击 */
-        .orbit-item.picked{
-          opacity: .22;
-        }
+
 
         /* 牌背图片（orbit 牌堆用） */
         .card-back-img{
@@ -693,7 +714,7 @@
                     picked: pickedOrbitIndices.includes(index)
                   }"
                   :ref="setOrbitItemRef"
-                  @click="onOrbitCardClick(index, $event)"
+                  @pointerdown.prevent="onOrbitCardClick(index, $event)"
                 >
                   <div class="tarot-card orbit-card">
                     <div class="card-face card-back">
@@ -1357,7 +1378,8 @@
                 };
 
                 const flyToSlot = (fromCardEl, slotEl) => {
-                  if (!fromCardEl || !slotEl) return;
+                  if (!fromCardEl) return;
+                  if (!slotEl) return; // 没槽位就直接不飞，但不影响抽取
 
                   const from = fromCardEl.getBoundingClientRect();
                   const to = slotEl.getBoundingClientRect();
@@ -1389,42 +1411,46 @@
                   if (hasDrawn.value) return;
                   if (isShuffling.value) return;
                   if (!isDrawing.value) return;
-                
+
                   const max = requiredCardCount.value;
                   if (!max) return;
-                
+
                   if (pickedOrbitIndices.value.includes(index)) return;
                   if (selectedOrbitIndices.value.length >= max) return;
 
-                  const slotIndex = selectedOrbitIndices.value.length; // 0-based
-                  const slots = pickTrayRef.value?.querySelectorAll('.pick-slot');
-                  const slotEl = slots?.[slotIndex];
-
                   const itemEl = evt?.currentTarget;
-                  const cardEl = itemEl?.querySelector('.orbit-card') || itemEl;
+                  if (!itemEl) return;
 
-                  flyToSlot(cardEl, slotEl);
-                
+                  const cardEl = itemEl.querySelector('.orbit-card') || itemEl;
+
+                  const slotIndex = selectedOrbitIndices.value.length;
+                  const slots = pickTrayRef.value?.querySelectorAll?.('.pick-slot');
+                  const slotEl = slots?.[slotIndex] || null;
+
+                  // 飞牌：slot 或 card 缺失时也不阻断抽取
+                  try { flyToSlot(cardEl, slotEl); } catch(e) {}
+
                   selectedOrbitIndices.value.push(index);
                   pickedOrbitIndices.value.push(index);
-                
+
                   if (selectedOrbitIndices.value.length === max) {
                     const picked = selectedOrbitIndices.value.map(i => orbitCards.value[i]).filter(Boolean);
-                    
+
                     drawnCards.value = picked.map(card => ({
                       ...card,
                       isReversed: Math.random() > 0.7,
                       revealed: false
                     }));
-                
+
                     isDrawing.value = false;
                     isShuffling.value = false;
                     shuffleCountdown.value = 0;
                     clearShuffleTimer();
                     clearPhaseTimer && clearPhaseTimer();
-                    
+
                     selectedOrbitIndices.value = [];
                     pickedOrbitIndices.value = [];
+
                     hasDrawn.value = true;
                   }
                 };
