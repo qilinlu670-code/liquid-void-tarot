@@ -589,6 +589,45 @@
         @media (prefers-reduced-motion: reduce){
           .orbit-container.shuffling{ animation:none; }
         }
+
+        /* === Pick tray & fly animation === */
+        .pick-tray{
+          margin: 14px auto 0;
+          display: flex;
+          gap: 10px;
+          justify-content: center;
+          align-items: center;
+          min-height: 64px;
+        }
+        .pick-slot{
+          width: 44px;
+          height: 66px;
+          border-radius: 10px;
+          border: 1px dashed rgba(167,139,250,.55);
+          background: rgba(17,24,39,.18);
+          box-shadow: inset 0 0 0 1px rgba(124,58,237,.15);
+          transition: transform .2s ease, opacity .2s ease, border-color .2s ease;
+          opacity: .55;
+        }
+        .pick-slot.filled{
+          opacity: .9;
+          border-color: rgba(251,191,36,.65);
+          transform: scale(1.04);
+        }
+
+        /* picked: 被抽走后在牌堆里变淡，避免重复点击 */
+        .orbit-item.picked{
+          opacity: .22;
+        }
+
+        /* 飞牌克隆层（仅动画用） */
+        .fly-card{
+          position: fixed;
+          left: 0; top: 0;
+          z-index: 9999;
+          pointer-events: none;
+          will-change: transform, opacity;
+        }
     </style>
 </head>
 <body>
@@ -631,9 +670,12 @@
                   v-for="(card, index) in orbitCards"
                   :key="`orbit_${index}`"
                   class="orbit-item"
-                  :class="{ selected: selectedOrbitIndices.includes(index) }"
+                  :class="{ 
+                    selected: selectedOrbitIndices.includes(index),
+                    picked: pickedOrbitIndices.includes(index)
+                  }"
                   :ref="setOrbitItemRef"
-                  @click="onOrbitCardClick(index)"
+                  @click="onOrbitCardClick(index, $event)"
                 >
                   <div class="tarot-card orbit-card">
                     <div class="card-face card-back">
@@ -644,6 +686,15 @@
                   </div>
                 </div>
               </div>
+            </div>
+
+            <div v-if="isDrawing" class="pick-tray" ref="pickTrayRef">
+              <div
+                v-for="n in requiredCardCount"
+                :key="n"
+                class="pick-slot"
+                :class="{ filled: n <= selectedOrbitIndices.length }"
+              ></div>
             </div>
 
             <!-- 洗牌/抽牌提示 -->
@@ -790,7 +841,7 @@
                     
                     <!-- 开始占卜按钮 -->
                     <div class="text-center">
-                        <button v-show="!(isShuffling || isDrawing || hasDrawn)"
+                        <button v-if="!isShuffling && !isDrawing && !hasDrawn"
                             @click="startReading"
                             class="mystic-btn"
                             :disabled="!canStart"
@@ -1048,6 +1099,8 @@
                 };
 
                 const selectedOrbitIndices = ref([]); // 用户在 orbit 上点选的卡牌索引
+                const pickTrayRef = ref(null);
+                const pickedOrbitIndices = ref([]);
 
                 const requiredCardCount = computed(() => {
                   const spread = spreads.find(s => s.id === selectedSpread.value);
@@ -1281,7 +1334,36 @@
                     // 可以添加预选效果
                 };
 
-                const onOrbitCardClick = (index) => {
+                const flyToSlot = (fromCardEl, slotEl) => {
+                  if (!fromCardEl || !slotEl) return;
+
+                  const from = fromCardEl.getBoundingClientRect();
+                  const to = slotEl.getBoundingClientRect();
+
+                  const clone = fromCardEl.cloneNode(true);
+                  const wrapper = document.createElement('div');
+                  wrapper.className = 'fly-card';
+                  wrapper.style.width = `${from.width}px`;
+                  wrapper.style.height = `${from.height}px`;
+                  wrapper.style.transform = `translate(${from.left}px, ${from.top}px)`;
+                  wrapper.appendChild(clone);
+                  document.body.appendChild(wrapper);
+
+                  const dx = to.left + to.width/2 - (from.left + from.width/2);
+                  const dy = to.top + to.height/2 - (from.top + from.height/2);
+
+                  const anim = wrapper.animate(
+                    [
+                      { transform: `translate(${from.left}px, ${from.top}px) scale(1) rotate(0deg)`, opacity: 1 },
+                      { transform: `translate(${from.left + dx}px, ${from.top + dy}px) scale(0.55) rotate(10deg)`, opacity: 1 },
+                      { transform: `translate(${from.left + dx}px, ${from.top + dy}px) scale(0.45) rotate(12deg)`, opacity: 0 }
+                    ],
+                    { duration: 520, easing: 'cubic-bezier(0.2, 0.8, 0.2, 1)' }
+                  );
+                  anim.onfinish = () => wrapper.remove();
+                };
+
+                const onOrbitCardClick = (index, evt) => {
                   if (hasDrawn.value) return;
                   if (isShuffling.value) return;
                   if (!isDrawing.value) return;
@@ -1289,21 +1371,24 @@
                   const max = requiredCardCount.value;
                   if (!max) return;
                 
-                  // 再点取消
-                  const existing = selectedOrbitIndices.value.indexOf(index);
-                  if (existing !== -1) {
-                    selectedOrbitIndices.value.splice(existing, 1);
-                    return;
-                  }
-                
+                  if (pickedOrbitIndices.value.includes(index)) return;
                   if (selectedOrbitIndices.value.length >= max) return;
+
+                  const slotIndex = selectedOrbitIndices.value.length; // 0-based
+                  const slots = pickTrayRef.value?.querySelectorAll('.pick-slot');
+                  const slotEl = slots?.[slotIndex];
+
+                  const itemEl = evt?.currentTarget;
+                  const cardEl = itemEl?.querySelector('.orbit-card') || itemEl;
+
+                  flyToSlot(cardEl, slotEl);
                 
                   selectedOrbitIndices.value.push(index);
+                  pickedOrbitIndices.value.push(index);
                 
-                  // 抽满：生成 drawnCards，锁定其它牌（通过 hasDrawn 隐藏 orbit 区，等价不可点）
                   if (selectedOrbitIndices.value.length === max) {
                     const picked = selectedOrbitIndices.value.map(i => orbitCards.value[i]).filter(Boolean);
-                
+                    
                     drawnCards.value = picked.map(card => ({
                       ...card,
                       isReversed: Math.random() > 0.7,
@@ -1314,8 +1399,10 @@
                     isShuffling.value = false;
                     shuffleCountdown.value = 0;
                     clearShuffleTimer();
-                
+                    clearPhaseTimer && clearPhaseTimer();
+                    
                     selectedOrbitIndices.value = [];
+                    pickedOrbitIndices.value = [];
                     hasDrawn.value = true;
                   }
                 };
@@ -1514,6 +1601,7 @@
                     isDrawing.value = false;
                     shuffleCountdown.value = 0;
                     selectedOrbitIndices.value = [];
+                    pickedOrbitIndices.value = [];
                     clearShuffleTimer();
                     clearPhaseTimer();
                 };
@@ -1598,6 +1686,8 @@
                     shuffleCountdown,
                     requiredCardCount,
                     selectedOrbitIndices,
+                    pickedOrbitIndices,
+                    pickTrayRef,
                     onOrbitCardClick,
                     orbitPhaseSeed
                 };
