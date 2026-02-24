@@ -664,64 +664,70 @@
           will-change: transform, opacity;
         }
 
-        /* ===== Pick tray image ===== */
-        .pick-slot{
-          position: relative;
+        /* ====== 2.1 热区固定在牌面：orbit-item 不接事件，只有 orbit-card 接 ====== */
+        .orbit-item { pointer-events: none; }              /* 防止点到空白/边缘 */
+        .orbit-card { pointer-events: auto; }              /* 只允许点牌面 */
+        .orbit-card * { pointer-events: none; }            /* 内部元素不抢事件 */
+
+        /* ====== 2.2 hover 高亮稳定：不做 translateY（避免离开热区导致抖动） ====== */
+        .orbit-container.drawing .orbit-card{
+          transition: transform .12s ease, box-shadow .12s ease, opacity .12s ease;
+          transform: translateZ(0);
+          -webkit-tap-highlight-color: transparent;
+          touch-action: manipulation;
+          will-change: transform; /* 只对牌面 */
+          z-index: 1;
+        }
+
+        /* 鼠标放在牌面上就算选中态（稳定、不闪） */
+        .orbit-container.drawing .orbit-item:not(.picked) .orbit-card:hover{
+          transform: translateZ(0) scale(1.035);
+          box-shadow: 0 16px 30px rgba(0,0,0,.55);
+          z-index: 10; /* 仅牌面抬层级，稳定压过邻牌 */
+        }
+
+        /* ====== 2.3 被抽走：原位彻底消失，留空位 ====== */
+        .orbit-item.picked{
+          opacity: 0 !important;           /* 直接不显示 */
+          pointer-events: none !important;
+          transition: opacity .10s linear;
+        }
+
+        /* ====== 2.4 飞牌 clone：从牌面飞到槽位 ====== */
+        .fly-card{
+          position: fixed;
+          left: 0; top: 0;
+          z-index: 9999;
+          pointer-events: none;
+          transform: translate3d(0,0,0) scale(1);
+          transform-origin: center center;
+          opacity: 1;
+          transition: transform 520ms cubic-bezier(.2,.9,.2,1), opacity 520ms ease;
+          border-radius: 14px; /* 贴近你牌的圆角 */
           overflow: hidden;
         }
-        .pick-slot-img{
-          position: absolute;
-          inset: 0;
+        .fly-card img{
           width: 100%;
           height: 100%;
+          object-fit: cover;
+          display: block;
+        }
+
+        /* ====== 2.5 槽位背面：飞入结束后再淡入（避免"瞬间就填充"显得没动效） ====== */
+        .pick-slot{ position: relative; overflow: hidden; }
+        .pick-slot-img{
+          position: absolute; inset: 0;
+          width: 100%; height: 100%;
           object-fit: cover;
           border-radius: inherit;
           display: block;
           opacity: 0;
-          transform: scale(0.98);
-          animation: slotIn 180ms ease forwards;
+          transform: scale(.96);
+          transition: opacity .18s ease .34s, transform .18s ease .34s; /* 延迟淡入 */
         }
-        @keyframes slotIn{
-          to { opacity: 1; transform: scale(1); }
-        }
-
-        /* ===== Drawing hover: stable, no z-index bump (avoid flicker) ===== */
-        .orbit-container.drawing .orbit-item{
-          user-select: none;
-          -webkit-user-select: none;
-          touch-action: manipulation;
-        }
-
-        /* 只对“未抽走 + 未点击锁定”的牌启用 hover */
-        .orbit-container.drawing .orbit-item:not(.picked):not(.picking):hover .orbit-card{
-          transform: translateZ(0) translateY(-6px) scale(1.035);
+        .pick-slot.filled .pick-slot-img{
           opacity: 1;
-          box-shadow: 0 18px 34px rgba(0,0,0,.55);
-        }
-
-        /* 取消之前你可能加过的 hover z-index（这是频闪大头） */
-        .orbit-container.drawing .orbit-item:hover{
-          z-index: auto !important;
-        }
-
-        /* 点击后立即锁定该牌的视觉状态（不闪、不再参与 hover 抖动） */
-        .orbit-item.picking{
-          pointer-events: none !important; /* 防双击 */
-        }
-        .orbit-item.picking .orbit-card{
-          transform: translateZ(0) translateY(-6px) scale(1.035);
-          opacity: 1;
-          box-shadow: 0 18px 34px rgba(0,0,0,.55);
-        }
-
-        /* 已抽走：变淡并彻底不可点，且不再触发 hover 样式 */
-        .orbit-item.picked{
-          opacity: .22;
-          pointer-events: none !important;
-        }
-        .orbit-item.picked .orbit-card{
-          transform: none !important;
-          box-shadow: none !important;
+          transform: scale(1);
         }
     </style>
 </head>
@@ -765,14 +771,11 @@
                   v-for="(card, index) in orbitCards"
                   :key="`orbit_${index}`"
                   class="orbit-item"
-                  :class="{ 
-                    selected: selectedOrbitIndices.includes(index),
-                    picked: pickedOrbitIndices.includes(index)
-                  }"
+                  :class="{ picked: pickedOrbitIndices.includes(index) }"
                   :ref="setOrbitItemRef"
-                  @pointerdown.prevent="onOrbitCardClick(index, $event)"
                 >
-                  <div class="tarot-card orbit-card">
+                  <div class="tarot-card orbit-card"
+                       @pointerdown.prevent="onOrbitCardClick(index, $event)">
                     <div class="card-face card-back">
                       <img :src="getCardBackSrc()" alt="" loading="eager" decoding="async" class="card-back-img"/>
                       <div class="card-symbol">{{ card.symbol }}</div>
@@ -1449,33 +1452,29 @@
                 };
 
                 const flyToSlot = (fromCardEl, slotEl) => {
-                  if (!fromCardEl) return;
-                  if (!slotEl) return; // 没槽位就直接不飞，但不影响抽取
+                  if (!fromCardEl || !slotEl) return;
 
                   const from = fromCardEl.getBoundingClientRect();
                   const to = slotEl.getBoundingClientRect();
 
-                  const clone = fromCardEl.cloneNode(true);
-                  const wrapper = document.createElement('div');
-                  wrapper.className = 'fly-card';
-                  wrapper.style.width = `${from.width}px`;
-                  wrapper.style.height = `${from.height}px`;
-                  wrapper.style.transform = `translate(${from.left}px, ${from.top}px)`;
-                  wrapper.appendChild(clone);
-                  document.body.appendChild(wrapper);
+                  const clone = document.createElement('div');
+                  clone.className = 'fly-card';
+                  clone.style.width = `${from.width}px`;
+                  clone.style.height = `${from.height}px`;
+                  clone.style.left = `${from.left}px`;
+                  clone.style.top = `${from.top}px`;
+                  clone.innerHTML = `<img src="${getCardBackSrc()}" alt="" decoding="async" />`;
 
-                  const dx = to.left + to.width/2 - (from.left + from.width/2);
-                  const dy = to.top + to.height/2 - (from.top + from.height/2);
+                  document.body.appendChild(clone);
 
-                  const anim = wrapper.animate(
-                    [
-                      { transform: `translate(${from.left}px, ${from.top}px) scale(1) rotate(0deg)`, opacity: 1 },
-                      { transform: `translate(${from.left + dx}px, ${from.top + dy}px) scale(0.55) rotate(10deg)`, opacity: 1 },
-                      { transform: `translate(${from.left + dx}px, ${from.top + dy}px) scale(0.45) rotate(12deg)`, opacity: 0 }
-                    ],
-                    { duration: 520, easing: 'cubic-bezier(0.2, 0.8, 0.2, 1)' }
-                  );
-                  anim.onfinish = () => wrapper.remove();
+                  requestAnimationFrame(() => {
+                    const dx = (to.left + to.width / 2) - (from.left + from.width / 2);
+                    const dy = (to.top + to.height / 2) - (from.top + from.height / 2);
+                    clone.style.transform = `translate3d(${dx}px, ${dy}px, 0) scale(0.62)`;
+                    clone.style.opacity = '0.98';
+                  });
+
+                  clone.addEventListener('transitionend', () => clone.remove(), { once: true });
                 };
 
                 const onOrbitCardClick = (index, evt) => {
@@ -1488,27 +1487,17 @@
                   if (pickedOrbitIndices.value.includes(index)) return;
                   if (pickedOrbitIndices.value.length >= max) return;
 
-                  const itemEl = evt?.currentTarget;
-                  if (itemEl) itemEl.classList.add('picking');
+                  const cardEl = evt?.currentTarget;
+                  if (!cardEl) return;
 
-                  // 先计算槽位（这会让 slot 立刻显示背面，因为下面马上 push pickedOrbitIndices）
                   const slotIndex = pickedOrbitIndices.value.length;
                   const slots = pickTrayRef.value?.querySelectorAll?.('.pick-slot');
                   const slotEl = slots?.[slotIndex] || null;
 
-                  // 飞牌：容错，不影响抽取
-                  try {
-                    const cardEl = itemEl?.querySelector?.('.orbit-card') || itemEl;
-                    flyToSlot(cardEl, slotEl);
-                  } catch(e) {}
+                  if (slotEl) flyToSlot(cardEl, slotEl);
 
-                  // 立刻入列：让 UI 立即填充（背面显示）
                   pickedOrbitIndices.value.push(index);
 
-                  // 520ms 后解除 picking（避免卡住）
-                  setTimeout(() => { if (itemEl) itemEl.classList.remove('picking'); }, 520);
-
-                  // 抽满进入翻牌
                   if (pickedOrbitIndices.value.length === max) {
                     const picked = pickedOrbitIndices.value.map(i => orbitCards.value[i]).filter(Boolean);
 
@@ -1520,10 +1509,6 @@
 
                     isDrawing.value = false;
                     hasDrawn.value = true;
-
-                    // 清空中间状态
-                    selectedOrbitIndices.value = [];
-                    pickedOrbitIndices.value = [];
                   }
                 };
                 
