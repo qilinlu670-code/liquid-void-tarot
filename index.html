@@ -305,20 +305,19 @@
           display: none;
         }
 
-        /* === HARD FREEZE in drawing phase === */
+        /* ===== Freeze orbit while drawing (CSS-only, perf friendly) ===== */
         .orbit-container.drawing .orbit-item,
-        .orbit-container.drawing .orbit-card{
-          animation: none !important;
-          transition: transform .12s ease, opacity .12s ease, box-shadow .12s ease; /* hover 仍流畅 */
+        .orbit-container.drawing .orbit-item *{
+          animation-play-state: paused !important;
         }
-
-        /* 允许点击（保留你已有 pointer-events 规则，但确保 drawing 阶段最终可点） */
+        /* 如果你的轨道运动动画写在 orbit-card 上，再补一条 */
+        .orbit-container.drawing .orbit-card{
+          animation-play-state: paused !important;
+        }
+        /* 抽牌阶段可点击 */
         .orbit-container.drawing .orbit-item{
           pointer-events: auto !important;
           cursor: pointer;
-        }
-        .orbit-container.drawing .orbit-item *{
-          pointer-events: auto !important;
         }
 
         /* 抽牌阶段 hover 高亮（轻量：transform+opacity+box-shadow，避免 drop-shadow/filter） */
@@ -1128,24 +1127,7 @@
                 const shuffleCountdown = ref(0);
                 let shuffleTimerId = null;
 
-                const orbitContainer = ref(null);
 
-                const freezeOrbitNow = () => {
-                  const container = orbitContainer.value;
-                  if (!container) return;
-                  const items = container.querySelectorAll('.orbit-item');
-                  items.forEach((el) => {
-                    // 读取当前瞬间 transform
-                    const cs = window.getComputedStyle(el);
-                    const tf = cs.transform;
-                    // 固化 transform 到 inline
-                    if (tf && tf !== 'none') {
-                      el.style.transform = tf;
-                    }
-                    // 彻底停掉动画（双保险）
-                    el.style.animation = 'none';
-                  });
-                };
 
                 const orbitPhaseSeed = ref(0);
                 let phaseTimerId = null;
@@ -1254,12 +1236,14 @@
 
                     const item = els[i];
                     // orbit-item 负责定位，不需要 translate(-50%,-50%)（已由 CSS left/top:50% 实现）
-                    item.style.transform =
-                      `translate3d(${x}px, ${y}px, 0) ` +
-                      `rotateZ(${rotateZ}deg) rotateY(${rotateY}deg) rotateX(${rotateX}deg) ` +
-                      `scale(${scale})`;
-                    item.style.zIndex = String(zIndex);
-                    item.style.opacity = String(opacity);
+                    if (!isDrawing.value) {
+                      item.style.transform =
+                        `translate3d(${x}px, ${y}px, 0) ` +
+                        `rotateZ(${rotateZ}deg) rotateY(${rotateY}deg) rotateX(${rotateX}deg) ` +
+                        `scale(${scale})`;
+                      item.style.zIndex = String(zIndex);
+                      item.style.opacity = String(opacity);
+                    }
                   }
 
                   orbitRafId = requestAnimationFrame(animateOrbit);
@@ -1269,6 +1253,8 @@
                   if (orbitRafId) cancelAnimationFrame(orbitRafId);
                   orbitRafId = null;
                   orbitStartTime = null;
+                  // 重置 orbitItemEls 确保引用正确
+                  orbitItemEls.value = [];
                   updateOrbitMetrics();
                   orbitRafId = requestAnimationFrame(animateOrbit);
                 };
@@ -1502,11 +1488,7 @@
                       shuffleCountdown.value = 0;
                       isShuffling.value = false;
                       
-                      // 等一帧：确保最后一帧 transform 已结算
-                      requestAnimationFrame(() => {
-                        freezeOrbitNow();
-                        isDrawing.value = true; // 进入抽牌阶段
-                      });
+                      isDrawing.value = true; // 进入抽牌阶段
                       clearPhaseTimer();
                     }
                   }, 1000);
@@ -1683,14 +1665,7 @@
                     clearShuffleTimer();
                     clearPhaseTimer();
 
-                    // 清理行内样式，允许下次动画正常开始
-                    const container = orbitContainer.value;
-                    if (container) {
-                      container.querySelectorAll('.orbit-item').forEach((el) => {
-                        el.style.transform = '';
-                        el.style.animation = '';
-                      });
-                    }
+
                 };
                 
                 const createStars = () => {
