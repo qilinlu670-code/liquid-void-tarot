@@ -620,6 +620,24 @@
           opacity: .22;
         }
 
+        /* 牌背图片（orbit 牌堆用） */
+        .card-back-img{
+          width: 100%;
+          height: 100%;
+          object-fit: cover;
+          border-radius: inherit;
+          display: block;
+        }
+
+        /* 抽出牌的正/背面图片 */
+        .card-face-img{
+          width: 100%;
+          height: 100%;
+          object-fit: cover;
+          border-radius: inherit;
+          display: block;
+        }
+
         /* 飞牌克隆层（仅动画用） */
         .fly-card{
           position: fixed;
@@ -679,6 +697,7 @@
                 >
                   <div class="tarot-card orbit-card">
                     <div class="card-face card-back">
+                      <img :src="getCardBackSrc()" alt="" loading="eager" decoding="async" class="card-back-img"/>
                       <div class="card-symbol">{{ card.symbol }}</div>
                       <div class="card-name">{{ card.name }}</div>
                       <div class="card-pattern" :style="getCardPattern(index)"></div>
@@ -732,16 +751,17 @@
                     @click="revealCard(index)"
                 >
                     <div class="card-face card-back">
-                        <div class="card-symbol">{{ card.symbol }}</div>
-                        <div class="card-name">{{ card.name }}</div>
-                        <div class="card-pattern" :style="getCardPattern(allCards.findIndex(c => c.id === card.id))"></div>
+                        <img :src="getCardBackSrc()" alt="" loading="lazy" decoding="async" class="card-face-img"/>
                     </div>
                     <div class="card-face card-front">
-                        <div class="text-xs text-mystic-gold mb-1">{{ getPositionLabel(index) }}</div>
-                        <div class="card-symbol">{{ card.symbol }}</div>
-                        <div class="font-bold text-sm text-white">{{ card.name }}</div>
-                        <div class="text-xs mt-2" :class="card.isReversed ? 'text-mystic-pink' : 'text-mystic-cyan'">
-                            {{ card.isReversed ? '逆位' : '正位' }}
+                        <img :src="getCardFrontSrc(card)" alt="" loading="lazy" decoding="async" class="card-face-img"
+                             :style="card.isReversed ? 'transform: rotate(180deg)' : ''"/>
+                        <div style="position:absolute;bottom:6px;left:0;right:0;text-align:center;">
+                            <div class="text-xs text-mystic-gold" style="text-shadow:0 1px 3px rgba(0,0,0,0.8);">{{ getPositionLabel(index) }}</div>
+                            <div class="font-bold text-sm text-white" style="text-shadow:0 1px 3px rgba(0,0,0,0.8);">{{ card.name }}</div>
+                            <div class="text-xs" :class="card.isReversed ? 'text-mystic-pink' : 'text-mystic-cyan'" style="text-shadow:0 1px 3px rgba(0,0,0,0.8);">
+                                {{ card.isReversed ? '逆位' : '正位' }}
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -880,15 +900,17 @@
                             :class="{ 'flipped': card.revealed }"
                         >
                             <div class="card-face card-back">
-                                <div class="card-symbol">{{ card.symbol }}</div>
-                                <div class="card-name">{{ card.name }}</div>
+                                <img :src="getCardBackSrc()" alt="" loading="lazy" decoding="async" class="card-face-img"/>
                             </div>
                             <div class="card-face card-front">
-                                <div class="text-xs text-mystic-gold mb-1">{{ getPositionLabel(index) }}</div>
-                                <div class="card-symbol">{{ card.symbol }}</div>
-                                <div class="font-bold text-sm text-white">{{ card.name }}</div>
-                                <div class="text-xs mt-2" :class="card.isReversed ? 'text-mystic-pink' : 'text-mystic-cyan'">
-                                    {{ card.isReversed ? '逆位' : '正位' }}
+                                <img :src="getCardFrontSrc(card)" alt="" loading="lazy" decoding="async" class="card-face-img"
+                                     :style="card.isReversed ? 'transform: rotate(180deg)' : ''"/>
+                                <div style="position:absolute;bottom:6px;left:0;right:0;text-align:center;">
+                                    <div class="text-xs text-mystic-gold" style="text-shadow:0 1px 3px rgba(0,0,0,0.8);">{{ getPositionLabel(index) }}</div>
+                                    <div class="font-bold text-sm text-white" style="text-shadow:0 1px 3px rgba(0,0,0,0.8);">{{ card.name }}</div>
+                                    <div class="text-xs" :class="card.isReversed ? 'text-mystic-pink' : 'text-mystic-cyan'" style="text-shadow:0 1px 3px rgba(0,0,0,0.8);">
+                                        {{ card.isReversed ? '逆位' : '正位' }}
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -1585,6 +1607,15 @@
                     localStorage.setItem('tarotHistory', JSON.stringify(readingHistory.value));
                 };
                 
+                // ===== C1) 图片路径方法 =====
+                const getCardFrontSrc = (card) => {
+                  return `assets/cards/${card.id}.webp`;
+                };
+
+                const getCardBackSrc = () => {
+                  return `assets/cards/back.webp`;
+                };
+
                 const resetReading = () => {
                     question.value = '';
                     selectedDirection.value = '';
@@ -1689,7 +1720,9 @@
                     pickedOrbitIndices,
                     pickTrayRef,
                     onOrbitCardClick,
-                    orbitPhaseSeed
+                    orbitPhaseSeed,
+                    getCardFrontSrc,
+                    getCardBackSrc
                 };
             }
         }).mount('#app');
