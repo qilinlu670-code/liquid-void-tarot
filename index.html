@@ -305,14 +305,11 @@
           display: none;
         }
 
-        /* === Drawing phase: freeze orbit for better clicking === */
-        .orbit-container.drawing .orbit-item{
-          animation-play-state: paused !important; /* 直接暂停 motion-path */
-        }
-
-        /* 若你的动画写在 .orbit-card 而非 .orbit-item，也补这一条： */
+        /* === HARD FREEZE in drawing phase === */
+        .orbit-container.drawing .orbit-item,
         .orbit-container.drawing .orbit-card{
-          animation-play-state: paused !important;
+          animation: none !important;
+          transition: transform .12s ease, opacity .12s ease, box-shadow .12s ease; /* hover 仍流畅 */
         }
 
         /* 允许点击（保留你已有 pointer-events 规则，但确保 drawing 阶段最终可点） */
@@ -1131,6 +1128,25 @@
                 const shuffleCountdown = ref(0);
                 let shuffleTimerId = null;
 
+                const orbitContainer = ref(null);
+
+                const freezeOrbitNow = () => {
+                  const container = orbitContainer.value;
+                  if (!container) return;
+                  const items = container.querySelectorAll('.orbit-item');
+                  items.forEach((el) => {
+                    // 读取当前瞬间 transform
+                    const cs = window.getComputedStyle(el);
+                    const tf = cs.transform;
+                    // 固化 transform 到 inline
+                    if (tf && tf !== 'none') {
+                      el.style.transform = tf;
+                    }
+                    // 彻底停掉动画（双保险）
+                    el.style.animation = 'none';
+                  });
+                };
+
                 const orbitPhaseSeed = ref(0);
                 let phaseTimerId = null;
 
@@ -1485,7 +1501,12 @@
                       clearShuffleTimer();
                       shuffleCountdown.value = 0;
                       isShuffling.value = false;
-                      isDrawing.value = true; // 进入抽牌阶段
+                      
+                      // 等一帧：确保最后一帧 transform 已结算
+                      requestAnimationFrame(() => {
+                        freezeOrbitNow();
+                        isDrawing.value = true; // 进入抽牌阶段
+                      });
                       clearPhaseTimer();
                     }
                   }, 1000);
@@ -1661,6 +1682,15 @@
                     pickedOrbitIndices.value = [];
                     clearShuffleTimer();
                     clearPhaseTimer();
+
+                    // 清理行内样式，允许下次动画正常开始
+                    const container = orbitContainer.value;
+                    if (container) {
+                      container.querySelectorAll('.orbit-item').forEach((el) => {
+                        el.style.transform = '';
+                        el.style.animation = '';
+                      });
+                    }
                 };
                 
                 const createStars = () => {
@@ -1744,6 +1774,7 @@
                     requiredCardCount,
                     selectedOrbitIndices,
                     pickedOrbitIndices,
+                    orbitContainer,
                     pickTrayRef,
                     onOrbitCardClick,
                     orbitPhaseSeed,
