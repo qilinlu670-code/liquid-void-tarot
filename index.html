@@ -540,6 +540,34 @@
             .tarot-card { width: 50px; height: 85px; }
             .drawn-card { width: 80px; height: 135px; }
         }
+
+        /* === Orbit Shuffle / Manual Draw (perf-friendly) === */
+        .orbit-wrap{
+          overflow: visible;
+          padding-bottom: 80px;
+        }
+
+        .deck-hint{
+          margin-top: 10px;
+          text-align: center;
+          font-size: 14px;
+          color: rgba(229,231,235,.92);
+        }
+        .deck-hint .hint-strong{ color:#fbbf24; font-weight:700; }
+        .deck-hint .hint-sub{ margin-top:4px; font-size:12px; color: rgba(156,163,175,.92); }
+
+        /* 只有抽牌阶段允许点 */
+        .orbit-item{ pointer-events:none; }
+        .orbit-container.drawing .orbit-item{
+          pointer-events:auto;
+          cursor:pointer;
+        }
+
+        /* 选中态轻提示（不用 drop-shadow，避免掉帧） */
+        .orbit-item.selected .orbit-card{
+          transform: translate(-50%, -50%) scale(1.04) !important;
+          box-shadow: 0 14px 26px rgba(0,0,0,.5);
+        }
     </style>
 </head>
 <body>
@@ -575,12 +603,16 @@
             
             <!-- 首页：椭圆轨道顺时针转动（每张牌在跑） -->
             <div v-if="!hasDrawn" class="orbit-wrap">
-              <div class="orbit-container" ref="orbitContainer">
+              <div class="orbit-container"
+                   :class="{ shuffling: isShuffling, drawing: isDrawing }"
+                   ref="orbitContainer">
                 <div
                   v-for="(card, index) in orbitCards"
                   :key="`orbit_${index}`"
                   class="orbit-item"
+                  :class="{ selected: selectedOrbitIndices.includes(index) }"
                   :ref="setOrbitItemRef"
+                  @click="onOrbitCardClick(index)"
                 >
                   <div class="tarot-card orbit-card">
                     <div class="card-face card-back">
@@ -592,7 +624,32 @@
                 </div>
               </div>
             </div>
-            
+
+            <!-- 洗牌/抽牌提示 -->
+            <div v-if="!hasDrawn" class="deck-hint">
+              <template v-if="isShuffling">
+                <span class="hint-strong">洗牌中</span>
+                <span class="hint-strong"> {{ shuffleCountdown }}s</span>
+                <div class="hint-sub">倒计时结束后，请点击卡牌抽取</div>
+              </template>
+
+              <template v-else-if="isDrawing">
+                <span class="hint-strong">请抽取 {{ requiredCardCount }} 张牌</span>
+                <span>（已选 {{ selectedOrbitIndices.length }}/{{ requiredCardCount }}）</span>
+                <div class="hint-sub">点击卡牌抽取，抽满后进入翻牌查看</div>
+              </template>
+
+              <template v-else>
+                <div class="hint-sub">填写问题并点击下方「开始占卜」，将自动回到此处开始洗牌</div>
+              </template>
+            </div>
+
+            <!-- 已抽完成提示 -->
+            <div v-if="hasDrawn && !allCardsRevealed" class="deck-hint" style="margin-top:18px;">
+              <span class="hint-strong">✅ 已抽取完成</span>
+              <span>，点击卡牌翻牌查看</span>
+            </div>
+
             <!-- 已抽卡牌展示 -->
             <div v-if="hasDrawn" class="drawn-cards-area">
                 <div 
@@ -618,7 +675,6 @@
                 </div>
             </div>
             
-            <p v-if="hasDrawn && !allCardsRevealed" class="text-gray-400 mt-6 text-sm">点击卡牌查看解读</p>
             
             <button 
                 v-if="!hasDrawn"
@@ -1505,42 +1561,3 @@
     </script>
 </body>
 </html>
-
-/* === Shuffle / Draw UX (perf-friendly) === */
-.arc-container.shuffling{
-  animation: shuffleSpin 0.9s linear infinite; /* 顺时针 */
-  transform-origin: 50% 80%;
-  will-change: transform;
-}
-@keyframes shuffleSpin{
-  from{ transform: rotate(0deg); }
-  to  { transform: rotate(360deg); }
-}
-
-/* 抽牌阶段才允许“看起来可点” */
-.arc-container.drawing .arc-card-wrapper{
-  cursor: pointer;
-}
-
-/* 牌背不显示牌名/符号（避免挑牌） */
-.card-back .card-symbol,
-.card-back .card-name{
-  display: none !important;
-}
-
-/* 顶部牌堆提示 */
-.deck-hint{
-  margin-top: 10px;
-  text-align: center;
-  font-size: 14px;
-  color: rgba(229,231,235,.92);
-}
-.deck-hint .hint-strong{
-  color: #fbbf24;
-  font-weight: 700;
-}
-.deck-hint .hint-sub{
-  margin-top: 4px;
-  font-size: 12px;
-  color: rgba(156,163,175,.92);
-}
