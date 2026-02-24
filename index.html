@@ -289,7 +289,7 @@
           transform-style: preserve-3d;
           backface-visibility: hidden;
           box-shadow: 0 12px 22px rgba(0,0,0,0.45);
-          pointer-events: none;
+          pointer-events: auto; /* 允许点击 */
           transition: none !important;  /* 禁止 transition 干扰光滑动画 */
           cursor: default;
         }
@@ -558,8 +558,14 @@
 
         /* 只有抽牌阶段允许点 */
         .orbit-item{ pointer-events:none; }
+
         .orbit-container.drawing .orbit-item{
-          pointer-events:auto;
+          pointer-events:auto !important;
+          cursor:pointer;
+        }
+
+        .orbit-container.drawing .orbit-item *{
+          pointer-events:auto !important;
           cursor:pointer;
         }
 
@@ -567,6 +573,21 @@
         .orbit-item.selected .orbit-card{
           transform: translate(-50%, -50%) scale(1.04) !important;
           box-shadow: 0 14px 26px rgba(0,0,0,.5);
+        }
+
+        .orbit-container.shuffling{
+          --dur: 5s; /* 比 6s 再快一点更像洗 */
+          animation: shuffleWobble 0.28s ease-in-out infinite alternate;
+          will-change: transform;
+        }
+
+        @keyframes shuffleWobble{
+          from{ transform: rotateZ(-1.6deg) translateY(-2px); }
+          to  { transform: rotateZ( 1.6deg) translateY( 2px); }
+        }
+
+        @media (prefers-reduced-motion: reduce){
+          .orbit-container.shuffling{ animation:none; }
         }
     </style>
 </head>
@@ -769,7 +790,7 @@
                     
                     <!-- 开始占卜按钮 -->
                     <div class="text-center">
-                        <button 
+                        <button v-show="!(isShuffling || isDrawing || hasDrawn)"
                             @click="startReading"
                             class="mystic-btn"
                             :disabled="!canStart"
@@ -1016,6 +1037,16 @@
                 const shuffleCountdown = ref(0);
                 let shuffleTimerId = null;
 
+                const orbitPhaseSeed = ref(0);
+                let phaseTimerId = null;
+
+                const clearPhaseTimer = () => {
+                  if (phaseTimerId) {
+                    clearInterval(phaseTimerId);
+                    phaseTimerId = null;
+                  }
+                };
+
                 const selectedOrbitIndices = ref([]); // 用户在 orbit 上点选的卡牌索引
 
                 const requiredCardCount = computed(() => {
@@ -1085,8 +1116,13 @@
                   for (let i = 0; i < n; i++) {
                     // 每张牌的初始角度，均匀分布
                     const initAngle = (i / n) * Math.PI * 2;
-                    // 当前角度 = 初始角度 + 全局旋转角（顺时针）
-                    const theta = initAngle + globalAngle;
+
+                    // 增加相位扰动（仅在洗牌阶段有效，seed 变化会产生抖动感）
+                    const seedShift = orbitPhaseSeed.value * Math.PI * 0.15;
+                    const idxJitter = Math.sin((i + 1) * 999 + orbitPhaseSeed.value * 1000) * 0.04;
+
+                    // 当前角度 = 初始角度 + 全局旋转角 + 扰动
+                    const theta = initAngle + globalAngle + seedShift + idxJitter;
 
                     // 椭圆上的位置
                     const x = orbitA * Math.cos(theta);
@@ -1286,29 +1322,36 @@
                 
                 const startReading = () => {
                   if (!canStart.value) return; // 保持原禁用逻辑
-                
+
                   // 回首屏
                   heroSection.value.scrollIntoView({ behavior: 'smooth' });
-                
+
                   // 重置抽牌
                   hasDrawn.value = false;
                   drawnCards.value = [];
                   selectedOrbitIndices.value = [];
-                
+
                   // 洗牌 3 秒倒计时（顺时针运动由 motion-path 驱动，洗牌只调快 --dur）
                   isDrawing.value = false;
                   isShuffling.value = true;
                   shuffleCountdown.value = 3;
-                
+
+                  orbitPhaseSeed.value = Math.random();
+                  clearPhaseTimer();
+                  phaseTimerId = setInterval(() => {
+                    orbitPhaseSeed.value = Math.random();
+                  }, 180);
+
                   clearShuffleTimer();
                   shuffleTimerId = setInterval(() => {
                     shuffleCountdown.value -= 1;
-                
+
                     if (shuffleCountdown.value <= 0) {
                       clearShuffleTimer();
                       shuffleCountdown.value = 0;
                       isShuffling.value = false;
                       isDrawing.value = true; // 进入抽牌阶段
+                      clearPhaseTimer();
                     }
                   }, 1000);
                 };
@@ -1472,6 +1515,7 @@
                     shuffleCountdown.value = 0;
                     selectedOrbitIndices.value = [];
                     clearShuffleTimer();
+                    clearPhaseTimer();
                 };
                 
                 const createStars = () => {
@@ -1554,7 +1598,8 @@
                     shuffleCountdown,
                     requiredCardCount,
                     selectedOrbitIndices,
-                    onOrbitCardClick
+                    onOrbitCardClick,
+                    orbitPhaseSeed
                 };
             }
         }).mount('#app');
