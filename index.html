@@ -293,11 +293,7 @@
           transition: none !important;  /* 禁止 transition 干扰光滑动画 */
           cursor: default;
         }
-        .orbit-card:hover {
-          transform: translate(-50%, -50%) !important;  /* 覆盖 tarot-card:hover */
-          z-index: inherit;
-          box-shadow: 0 12px 22px rgba(0,0,0,0.45);
-        }
+        /* .orbit-card:hover { ... } - 已取消 */
 
         /* 只在首页旋转牌阵里隐藏牌名/符号（避免用户挑牌） */
         .orbit-container .card-symbol,
@@ -321,19 +317,9 @@
         }
 
         /* 抽牌阶段 hover 高亮（轻量：transform+opacity+box-shadow，避免 drop-shadow/filter） */
-        .orbit-container.drawing .orbit-item:hover{
-          z-index: 3;
-        }
-        .orbit-container.drawing .orbit-item:hover .orbit-card{
-          transform: translateZ(0) translateY(-6px) scale(1.04) !important;
-          box-shadow: 0 18px 34px rgba(0,0,0,.55);
-          opacity: 1;
-        }
-
-        /* 点击确认瞬间（可选：给一个 pressed 反馈） */
-        .orbit-container.drawing .orbit-item:active .orbit-card{
-          transform: translateZ(0) translateY(-2px) scale(1.02) !important;
-        }
+        /* 抽牌阶段 hover 高亮已取消 */
+        /* .orbit-container.drawing .orbit-item:hover{ z-index: 3; } */
+        /* .orbit-container.drawing .orbit-item:hover .orbit-card{ ... } */
 
         /* 已抽走的牌：变淡并不可点 */
         .orbit-item.picked{
@@ -664,6 +650,22 @@
           will-change: transform, opacity;
         }
 
+        /* ===== Disable hover highlight/selected state for orbit cards ===== */
+        .orbit-container.drawing .orbit-item:not(.picked) .orbit-card:hover{
+          transform: translateZ(0) !important;
+          box-shadow: none !important;
+          opacity: 1 !important;
+          z-index: 1 !important;
+        }
+        .orbit-container.drawing .orbit-item:not(.picked) .orbit-card:active{
+          transform: translateZ(0) !important;
+          box-shadow: none !important;
+        }
+        /* 保留可点击热区 */
+        .orbit-item{ pointer-events: none; }
+        .orbit-card{ pointer-events: auto; cursor: pointer; }
+        .orbit-card *{ pointer-events: none; }
+
         /* ====== 2.1 热区固定在牌面：orbit-item 不接事件，只有 orbit-card 接 ====== */
         .orbit-item { pointer-events: none; }              /* 防止点到空白/边缘 */
         .orbit-card { pointer-events: auto; }              /* 只允许点牌面 */
@@ -679,12 +681,8 @@
           z-index: 1;
         }
 
-        /* 鼠标放在牌面上就算选中态（稳定、不闪） */
-        .orbit-container.drawing .orbit-item:not(.picked) .orbit-card:hover{
-          transform: translateZ(0) scale(1.035);
-          box-shadow: 0 16px 30px rgba(0,0,0,.55);
-          z-index: 10; /* 仅牌面抬层级，稳定压过邻牌 */
-        }
+        /* 鼠标放在牌面上就算选中态（稳定、不闪） - 已按需取消 */
+        /* .orbit-container.drawing .orbit-item:not(.picked) .orbit-card:hover{ ... } */
 
         /* ====== 2.3 被抽走：原位彻底消失，留空位 ====== */
         .orbit-item.picked{
